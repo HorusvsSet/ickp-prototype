@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>120 Increasingly Cursed Knight Puzzles</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <header class="game-header">
+            <h1>120 <span class="cursed">ICKP</span></h1>
+            <div class="header-controls">
+                <div class="level-nav">
+                    <button id="prevLevelBtn" class="btn btn-sm btn-secondary" title="Previous Level">←</button>
+                    <div class="level-selector">
+                        <label for="levelSelect">Level</label>
+                        <select id="levelSelect" aria-label="Select level"></select>
+                    </div>
+                    <button id="nextLevelBtn" class="btn btn-sm btn-primary" title="Next Level">→</button>
+                </div>
+                <div class="move-counter" id="moveCounter">Moves: 0 / 0</div>
+                <div class="chapter-indicator" id="chapterIndicator">Chapter I: The Basics</div>
+                <button id="devInfiniteMovesBtn" class="btn btn-sm btn-tertiary" title="Dev: Infinite Moves">∞</button>
+            </div>
+        </header>
+
+        <main class="game-main">
+            <div class="board-container" tabindex="0" aria-label="Game Board">
+                <canvas id="gameCanvas" class="game-canvas"></canvas>
+                <div class="board-overlay" id="boardOverlay"></div>
+                <div class="board-grid-overlay"></div>
+            </div>
+
+            <!-- Inventory Bar Below Board -->
+            <div class="inventory-bar" id="inventoryBar">
+                <div class="inventory-tools" id="inventoryTools"></div>
+                <div class="inventory-controls" id="inventoryControls">
+                    <button id="undoBtn" class="btn btn-primary" disabled title="Undo (Z)">
+                        <span class="btn-icon">↶</span> Undo
+                    </button>
+                    <button id="resetBtn" class="btn btn-secondary" title="Reset Level (R)">
+                        <span class="btn-icon">↺</span> Reset
+                    </button>
+                    <button id="waitBtn" class="btn btn-tertiary" title="Wait / Pass Turn (Space)">
+                        <span class="btn-icon">⏸</span> Wait
+                    </button>
+                    <button id="exportBtn" class="btn btn-sm" title="Export Save">💾</button>
+                    <button id="importBtn" class="btn btn-sm" title="Import Save">📁</button>
+                    <input type="file" id="importFile" accept=".json" style="display:none">
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <span id="statusMessage" class="status-message">Click a knight, then click destination</span>
+                <span id="progressStats" class="progress-stats">0/120</span>
+            </div>
+        </main>
+
+        <!-- Modal for level complete -->
+        <div id="levelCompleteModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Level Complete!</h2>
+                <p id="completeMessage"></p>
+                <div class="modal-actions">
+                    <button id="modalNextLevelBtn" class="btn btn-primary">Next Level</button>
+                    <button id="replayLevelBtn" class="btn btn-secondary">Replay</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for import confirmation -->
+        <div id="importModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Import Save Data</h2>
+                <p>This will replace your current progress. Continue?</p>
+                <div class="modal-actions">
+                    <button id="confirmImportBtn" class="btn btn-danger">Yes, Import</button>
+                    <button id="cancelImportBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <script type="module" src="game.js"></script>
+        <footer class="version-footer">
+            <span class="version-number">v2.0.0</span>
+            <span>120 ICKP</span>
+        </footer>
+    </div>
+</body>
+</html>
