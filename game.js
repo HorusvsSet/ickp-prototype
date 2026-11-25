@@ -5,7 +5,7 @@
 
 import { Levels, getLevel, getLevelsByChapter, getChapterInfo, TileType, KnightColor, ToolType, Dir } from './levels.js';
 import { GameState, SaveManager, KNIGHT_MOVES, canKnightMove } from './engine.js';
-import { Renderer, ParticleAnimation, ScreenShakeAnimation, CoinCollectAnimation, FlagReachAnimation, ArrowActivationAnimation, PortalTeleportAnimation, VoidSwirlAnimation } from './renderer.js';
+import { Renderer, ParticleAnimation, ScreenShakeAnimation } from './renderer.js';
 
 // ============================================================================
 // MAIN GAME CLASS
@@ -63,9 +63,6 @@ class ICKPGame {
         this.loadSave();
         this.resizeCanvas();
         this.startRenderLoop();
-
-        // Play startup beep
-        setTimeout(() => this.playBeep(660, 0.1, 'sine'), 500);
 
         window.addEventListener('resize', () => this.resizeCanvas());
     }
@@ -148,62 +145,38 @@ class ICKPGame {
                     if (e.ctrlKey || e.metaKey) return;
                     this.undo();
                     e.preventDefault();
-                    this.showKeyHint('Z', 'Undo');
                     break;
                 case 'r':
                 case 'R':
                     this.resetLevel();
-                    this.showKeyHint('R', 'Reset');
                     break;
                 case ' ':
                     this.wait();
                     e.preventDefault();
-                    this.showKeyHint('Space', 'Wait');
                     break;
                 case 'Escape':
                     this.clearSelection();
-                    this.showKeyHint('Esc', 'Deselect');
                     break;
-                case '1': this.selectToolForPlacement('hammer'); this.showKeyHint('1', 'Hammer'); break;
-                case '2': this.selectToolForPlacement('arrow_up'); this.showKeyHint('2', 'Arrow ↑'); break;
-                case '3': this.selectToolForPlacement('arrow_right'); this.showKeyHint('3', 'Arrow →'); break;
-                case '4': this.selectToolForPlacement('arrow_down'); this.showKeyHint('4', 'Arrow ↓'); break;
-                case '5': this.selectToolForPlacement('arrow_left'); this.showKeyHint('5', 'Arrow ←'); break;
-                case '6': this.useBootOnSelectedKnight('up'); this.showKeyHint('6', 'Boot'); break;
+                case '1': this.selectToolForPlacement('hammer'); break;
+                case '2': this.selectToolForPlacement('arrow_up'); break;
+                case '3': this.selectToolForPlacement('arrow_right'); break;
+                case '4': this.selectToolForPlacement('arrow_down'); break;
+                case '5': this.selectToolForPlacement('arrow_left'); break;
+                case '6': this.useBootOnSelectedKnight('up'); break; // Simplified - could add direction selector
             }
         });
-    }
-
-    showKeyHint(key, action) {
-        // Remove existing hint
-        const existing = document.querySelector('.key-hint');
-        if (existing) existing.remove();
-
-        const hint = document.createElement('div');
-        hint.className = 'key-hint';
-        hint.innerHTML = `<kbd>${key}</kbd> <span>${action}</span>`;
-        document.body.appendChild(hint);
-
-        // Animate in
-        requestAnimationFrame(() => hint.classList.add('show'));
-
-        // Remove after delay
-        setTimeout(() => {
-            hint.classList.remove('show');
-            setTimeout(() => hint.remove(), 200);
-        }, 1500);
     }
 
     resizeCanvas() {
         const container = this.canvas.parentElement;
         const width = container.clientWidth;
-        // Calculate available height: viewport - header - inventory - status - footer
+        // Calculate available height: viewport - header - inventory - status
         const headerHeight = 60;
         const inventoryHeight = 90;
         const statusHeight = 36;
-        const footerHeight = 26;
-        const height = Math.max(300, window.innerHeight - headerHeight - inventoryHeight - statusHeight - footerHeight - 20);
-        // Let renderer handle canvas dimensions with DPR
+        const height = Math.max(300, window.innerHeight - headerHeight - inventoryHeight - statusHeight - 20);
+        this.canvas.width = width;
+        this.canvas.height = height;
         this.renderer.resize(width, height);
     }
 
@@ -245,22 +218,6 @@ class ICKPGame {
         this.updateUI();
         this.updateLevelSelect();
         this.renderer.animations = [];
-
-        // Level transition animation
-        this.canvas.style.opacity = '0';
-        this.canvas.style.transform = 'scale(0.98)';
-        this.canvas.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
-        this.canvas.dataset.transitioning = 'true';
-        requestAnimationFrame(() => {
-            this.canvas.style.opacity = '1';
-            this.canvas.style.transform = 'scale(1)';
-        });
-
-        // Reset transition after animation
-        setTimeout(() => {
-            this.canvas.style.transition = '';
-            this.canvas.dataset.transitioning = 'false';
-        }, 300);
     }
 
     nextLevel() {
@@ -424,37 +381,14 @@ class ICKPGame {
             this.clearSelection();
             this.updateUI();
             this.showMessage(result.offScreen ? 'Built off-screen!' : 'Tool placed!');
-
-            // Visual feedback based on tool
+            // Particle effect
             const rect = this.renderer.getTileRect(x, y);
-            const cx = rect.x + rect.w / 2;
-            const cy = rect.y + rect.h / 2;
-
-            if (this.placingTool === 'hammer') {
-                if (result.offScreen) {
-                    this.renderer.addAnimation(new ParticleAnimation(cx, cy, '#8b4513', 12));
-                } else if (tile === TileType.BRICK || tile === TileType.METAL) {
-                    // Destroyed wall
-                    this.renderer.addAnimation(new ParticleAnimation(cx, cy, '#a85028', 15));
-                    this.showMessage('Wall destroyed!');
-                } else {
-                    // Built tile
-                    this.renderer.addAnimation(new ParticleAnimation(cx, cy, '#8b4513', 10));
-                }
-            } else if (this.placingTool.startsWith('arrow_')) {
-                // Arrow placed - show direction pulse
-                this.renderer.addAnimation(new ArrowActivationAnimation(
-                    x, y, dir, false,
-                    this.renderer.tileSize, this.renderer.tileGap,
-                    this.renderer.offsetX, this.renderer.offsetY
-                ));
-                this.showMessage(`${dir.toUpperCase()} arrow placed!`);
-            }
+            this.renderer.addAnimation(new ParticleAnimation(
+                rect.x + rect.w / 2, rect.y + rect.h / 2,
+                '#00d4aa', 12
+            ));
         } else {
             this.showMessage(result.reason || 'Cannot place tool there');
-            // Screen shake for invalid placement
-            this.renderer.addAnimation(new ScreenShakeAnimation(5, 150));
-            this.playBeep(220, 0.1, 'square'); // Low beep for invalid
         }
     }
 
@@ -591,55 +525,21 @@ class ICKPGame {
 
         const result = this.gameState.moveKnight(knight, dx, dy);
         if (result.valid) {
-            // Check if chain should end: knight stuck in void, off-board, or out of moves
-            const movesExhausted = !this.gameState.infiniteMoves && this.gameState.movesUsed >= this.gameState.maxMoves;
-            const knightStuckInVoid = result.stuckInVoid || result.offBoard;
-
-            // Visual feedback based on what happened
-            const rect = this.renderer.getTileRect(knight.x, knight.y);
-            const cx = rect.x + rect.w / 2;
-            const cy = rect.y + rect.h / 2;
-
-            if (result.carryKnight) {
-                // Picked up another knight
-                this.renderer.addAnimation(new ParticleAnimation(cx, cy, '#00e8b4', 12));
-                this.showMessage('Knight picked up!');
-            } else if (knight.atFlag) {
-                // Reached flag
-                this.renderer.addAnimation(new FlagReachAnimation(
-                    knight.x, knight.y, knight.color,
-                    this.renderer.tileSize, this.renderer.tileGap,
-                    this.renderer.offsetX, this.renderer.offsetY
-                ));
-                this.showMessage(`${knight.color} knight reached the flag!`);
-            } else if (result.stuckInVoid || result.offBoard) {
-                // Landed in void
-                this.renderer.addAnimation(new ParticleAnimation(cx, cy, '#8844ff', 10));
-                this.renderer.addAnimation(new VoidSwirlAnimation(
-                    knight.x, knight.y,
-                    this.renderer.tileSize, this.renderer.tileGap,
-                    this.renderer.offsetX, this.renderer.offsetY,
-                    '#8844ff'
-                ));
-            } else {
-                // Normal landing
-                this.renderer.addAnimation(new ParticleAnimation(cx, cy, '#00ff88', 8));
-            }
-
-            if (knightStuckInVoid || movesExhausted) {
-                // End selection chain
-                this.clearSelection();
-            } else {
-                // Keep knight selected for chaining moves, recompute destinations from new position
-                this.validDestinations = [];
-                this.computeValidDestinations(knight);
-            }
+            // Keep knight selected for chaining moves, recompute destinations from new position
+            this.validDestinations = [];
+            this.computeValidDestinations(knight);
             this.updateUI();
             this.checkGameEnd();
+
+            // Particle effect on landing
+            const rect = this.renderer.getTileRect(knight.x, knight.y);
+            this.renderer.addAnimation(new ParticleAnimation(
+                rect.x + rect.w / 2, rect.y + rect.h / 2,
+                '#00ff88', 8
+            ));
         } else {
             this.showMessage(result.reason || 'Invalid move');
             this.renderer.addAnimation(new ScreenShakeAnimation(8, 200));
-            this.playBeep(180, 0.1, 'square'); // Low beep for invalid move
         }
     }
 
@@ -651,16 +551,6 @@ class ICKPGame {
         } else if (this.gameState.status === 'lost') {
             this.showMessage(this.gameState.message);
         }
-    }
-
-    // Called from engine when coin is collected
-    onCoinCollected(knight) {
-        const rect = this.renderer.getTileRect(knight.x, knight.y);
-        this.renderer.addAnimation(new CoinCollectAnimation(
-            knight.x, knight.y,
-            this.renderer.tileSize, this.renderer.tileGap,
-            this.renderer.offsetX, this.renderer.offsetY
-        ));
     }
 
     onLevelComplete() {
@@ -680,96 +570,8 @@ class ICKPGame {
 
         this.elements.completeMessage.textContent = `Completed in ${this.gameState.movesUsed}/${this.gameState.maxMoves} moves!`;
         this.elements.levelCompleteModal.classList.remove('hidden');
-
-        // Celebration animation - burst particles
-        this.triggerCelebration();
-
-        // Play completion beep
-        this.playBeep(880, 0.15, 'sine');
-
         this.updateLevelSelect();
         this.updateUI();
-    }
-
-    triggerCelebration() {
-        const canvas = this.canvas;
-        const rect = canvas.getBoundingClientRect();
-        const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-
-        // Create celebration particles
-        const particles = [];
-        const colors = ['#00e8b4', '#ffcc00', '#bb86fc', '#00ff88', '#00bfff', '#ff5a5f'];
-
-        for (let i = 0; i < 30; i++) {
-            const angle = (Math.PI * 2 * i) / 30;
-            const speed = 3 + Math.random() * 4;
-            particles.push({
-                x: rect.width / 2,
-                y: rect.height / 2,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                life: 1,
-                color: colors[i % colors.length],
-                size: 4 + Math.random() * 4
-            });
-        }
-
-        const animate = () => {
-            let alive = 0;
-            ctx.save();
-            ctx.scale(dpr, dpr);
-
-            for (const p of particles) {
-                if (p.life > 0) {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    p.vy += 0.15; // gravity
-                    p.vx *= 0.98;
-                    p.vy *= 0.98;
-                    p.life -= 0.02;
-                    alive++;
-
-                    ctx.globalAlpha = p.life;
-                    ctx.fillStyle = p.color;
-                    ctx.shadowColor = p.color;
-                    ctx.shadowBlur = 8;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                }
-            }
-            ctx.restore();
-
-            if (alive > 0) {
-                requestAnimationFrame(animate);
-            }
-        };
-
-        animate();
-    }
-
-    playBeep(frequency, duration, type = 'sine') {
-        try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-
-            oscillator.type = type;
-            oscillator.frequency.value = frequency;
-
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + duration);
-        } catch (e) {
-            // Audio context might be blocked, ignore
-        }
     }
 
     // ================================================================
@@ -872,7 +674,6 @@ class ICKPGame {
         if (!this.gameState) return;
 
         // Move counter
-        const wasWarning = this.elements.moveCounter.classList.contains('warning');
         if (this.gameState.infiniteMoves) {
             this.elements.moveCounter.textContent = `Moves: ${this.gameState.movesUsed} / ∞`;
             this.elements.moveCounter.classList.remove('warning');
@@ -881,11 +682,6 @@ class ICKPGame {
             this.elements.moveCounter.textContent = `Moves: ${this.gameState.movesUsed} / ${this.gameState.maxMoves}`;
             this.elements.moveCounter.classList.toggle('warning', remaining <= 3 && remaining > 0);
         }
-
-        // Trigger counter change animation
-        this.elements.moveCounter.classList.remove('changed');
-        void this.elements.moveCounter.offsetWidth; // Force reflow
-        this.elements.moveCounter.classList.add('changed');
 
         // Buttons
         this.elements.undoBtn.disabled = this.gameState.history.length <= 1;
@@ -926,7 +722,7 @@ class ICKPGame {
 
         // Add portal gun if available
         if (tools.portalGun > 0) {
-            toolDefs.push({ id: 'portalGun', icon: '🌀', count: tools.portalGun, label: 'Portal Gun', shortcut: '' });
+            toolDefs.push({ id: 'portalGun', icon: '🔫', count: tools.portalGun, label: 'Portal Gun', shortcut: '' });
         }
 
         // Only render tools with count > 0
@@ -934,9 +730,10 @@ class ICKPGame {
             if (tool.count > 0) {
                 const slot = document.createElement('div');
                 slot.className = 'tool-slot';
-                slot.dataset.tool = tool.id; // Use full ID for CSS targeting
+                slot.dataset.tool = tool.id.replace('arrow_', 'arrow'); // Group arrows
                 if (tool.id.startsWith('arrow_')) {
                     slot.dataset.dir = tool.id.replace('arrow_', '');
+                    slot.dataset.tool = 'arrow';
                 }
                 slot.innerHTML = `
                     <span class="tool-icon">${tool.icon}</span>
@@ -946,14 +743,6 @@ class ICKPGame {
                 slot.addEventListener('click', () => this.selectToolForPlacement(tool.id));
                 container.appendChild(slot);
             }
-        }
-
-        // Show "no tools" message if inventory is empty
-        if (container.children.length === 0) {
-            const emptyMsg = document.createElement('div');
-            emptyMsg.className = 'inventory-empty';
-            emptyMsg.textContent = 'No tools available';
-            container.appendChild(emptyMsg);
         }
 
         this.updateInventorySelection();
@@ -1007,66 +796,12 @@ class ICKPGame {
 
         this.renderer.render(this.gameState, this.placingTool, this.hoverTile, null);
 
-        // Apply screen shake - use a data attribute to track level transition scale
-        const isTransitioning = this.canvas.dataset.transitioning === 'true';
-        const baseScale = isTransitioning ? 'scale(0.98)' : 'scale(1)';
-
+        // Apply screen shake
         if (shakeX !== 0 || shakeY !== 0) {
-            this.canvas.style.transform = `${baseScale} translate(${shakeX}px, ${shakeY}px)`;
+            this.canvas.style.transform = `translate(${shakeX}px, ${shakeY}px)`;
         } else {
-            this.canvas.style.transform = baseScale;
+            this.canvas.style.transform = 'none';
         }
-
-        // Check for portal teleportation to trigger animation
-        this.checkPortalTeleport();
-    }
-
-    // Track previous knight positions to detect portal teleportation
-    checkPortalTeleport() {
-        if (!this.prevKnightPositions) {
-            this.prevKnightPositions = new Map();
-            for (const knight of this.gameState.knights) {
-                this.prevKnightPositions.set(knight.id, { x: knight.x, y: knight.y });
-            }
-            return;
-        }
-
-        for (const knight of this.gameState.knights) {
-            const prev = this.prevKnightPositions.get(knight.id);
-            if (prev) {
-                const dx = Math.abs(knight.x - prev.x);
-                const dy = Math.abs(knight.y - prev.y);
-                // If knight moved more than knight-move distance, likely portal
-                if (dx > 2 || dy > 2) {
-                    // Check if portal was involved
-                    const fromTile = this.gameState.board[prev.y]?.[prev.x];
-                    const toTile = this.gameState.board[knight.y]?.[knight.x];
-                    const isPortalTile = (tile) => tile >= TileType.PORTAL_RED && tile <= TileType.PORTAL_ORANGE;
-                    if (isPortalTile(fromTile) || isPortalTile(toTile)) {
-                        // Find portal color
-                        const portalColor = isPortalTile(fromTile) ? this.getPortalColor(fromTile) : this.getPortalColor(toTile);
-                        this.renderer.addAnimation(new PortalTeleportAnimation(
-                            prev.x, prev.y, knight.x, knight.y, portalColor,
-                            this.renderer.tileSize, this.renderer.tileGap,
-                            this.renderer.offsetX, this.renderer.offsetY
-                        ));
-                    }
-                }
-            }
-            this.prevKnightPositions.set(knight.id, { x: knight.x, y: knight.y });
-        }
-    }
-
-    getPortalColor(tile) {
-        const portalMap = {
-            [TileType.PORTAL_RED]: 'red',
-            [TileType.PORTAL_BLUE]: 'blue',
-            [TileType.PORTAL_GREEN]: 'green',
-            [TileType.PORTAL_YELLOW]: 'yellow',
-            [TileType.PORTAL_PURPLE]: 'purple',
-            [TileType.PORTAL_ORANGE]: 'orange'
-        };
-        return portalMap[tile] || 'red';
     }
 }
 
