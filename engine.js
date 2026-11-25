@@ -63,28 +63,33 @@ export const KNIGHT_MOVES = [
     { dx: 2, dy: 1 },   { dx: 1, dy: 2 },   { dx: -1, dy: 2 }, { dx: -2, dy: 1 }
 ];
 
-// For each knight move, the two possible L-shaped paths (elbow tiles only)
-// Path 0: First move in "2" direction (halfway), then "1" direction to target
-// Path 1: First move in "1" direction (full), then "2" direction to target
-// Only the elbow (intermediate) tiles are checked for wall blocking
+// For each knight move, the two possible L-shaped paths (ALL intermediate tiles)
+// Path 0: First move 2 in major direction, then 1 in minor
+// Path 1: First move 1 in minor direction, then 2 in major
+// If ANY tile in a path is BRICK/METAL/BOMB, that path is blocked
+// BOTH paths must be blocked to prevent the move
 export const KNIGHT_PATHS = KNIGHT_MOVES.map(move => {
     const { dx, dy } = move;
     const orthoFirst = Math.abs(dx) === 2; // True if 2 horizontal, 1 vertical
+    const sx = dx > 0 ? 1 : -1;
+    const sy = dy > 0 ? 1 : -1;
+    const ax = Math.abs(dx);
+    const ay = Math.abs(dy);
     if (orthoFirst) {
         // Move is 2 horizontal, 1 vertical (e.g., 2 right, 1 up)
-        // Path 0 (horizontal first): elbow at halfway horizontal (dx/2, 0)
-        // Path 1 (vertical first): elbow at full vertical (0, dy)
+        // Path 0 (horizontal first): (sx,0), (2*sx,0), then (2*sx, sy) -> target
+        // Path 1 (vertical first): (0,sy), then (sx,sy), (2*sx,sy) -> target
         return [
-            [{ x: dx/2, y: 0 }],
-            [{ x: 0, y: dy }]
+            [{ x: sx, y: 0 }, { x: 2*sx, y: 0 }],           // Path 0: all horizontal intermediates
+            [{ x: 0, y: sy }, { x: sx, y: sy }]             // Path 1: vertical then horizontal intermediates
         ];
     } else {
         // Move is 1 horizontal, 2 vertical (e.g., 1 right, 2 up)
-        // Path 0 (vertical first): elbow at halfway vertical (0, dy/2)
-        // Path 1 (horizontal first): elbow at full horizontal (dx, 0)
+        // Path 0 (vertical first): (0,sy), (0,2*sy), then (sx,2*sy) -> target
+        // Path 1 (horizontal first): (sx,0), then (sx,sy), (sx,2*sy) -> target
         return [
-            [{ x: 0, y: dy/2 }],
-            [{ x: dx, y: 0 }]
+            [{ x: 0, y: sy }, { x: 0, y: 2*sy }],           // Path 0: all vertical intermediates
+            [{ x: sx, y: 0 }, { x: sx, y: sy }]             // Path 1: horizontal then vertical intermediates
         ];
     }
 });
@@ -104,17 +109,17 @@ export function canKnightMove(board, x, y, dx, dy, knights = [], carryingKnight 
     // Check if target is within bounds
     const inBounds = targetX >= 0 && targetX < width && targetY >= 0 && targetY < height;
 
-    // Check if knight is currently on void (EMPTY on-board OR off-board) - if so, can't move unless there's an arrow on current tile or hammer builds
+    // Get current tile (works for both on-board and off-board built tiles)
     const isOffBoard = x < 0 || x >= width || y < 0 || y >= height;
     let currentTile;
-    if (!isOffBoard && y >= 0 && y < height && x >= 0 && x < width) {
+    if (!isOffBoard) {
         currentTile = board[y][x];
     } else if (offBoardTiles && offBoardTiles.has(`${x},${y}`)) {
         currentTile = offBoardTiles.get(`${x},${y}`);
     } else {
         currentTile = TileType.EMPTY;
     }
-    const onVoid = currentTile === TileType.EMPTY || isOffBoard;
+    const onVoid = currentTile === TileType.EMPTY;
     // Check for arrow on current tile: void arrows (off-board) OR board arrows (green/blue) OR void arrows on EMPTY tiles OR off-board arrows
     const hasVoidArrowOnCurrent = onVoid && voidArrows.some(va => va.x === x && va.y === y);
     // Regular arrows (7-14) OR void arrows (15-22)
@@ -129,46 +134,50 @@ export function canKnightMove(board, x, y, dx, dy, knights = [], carryingKnight 
         return { valid: false, reason: 'Knight stuck in void' };
     }
 
-    // Get the two possible paths (elbow tiles only)
+    // Get the two possible paths (all intermediate tiles)
     const moveIndex = KNIGHT_MOVES.findIndex(m => m.dx === dx && m.dy === dy);
     if (moveIndex === -1) return { valid: false, reason: 'Invalid knight move' };
 
     const paths = KNIGHT_PATHS[moveIndex];
 
-    // Check each path - at least one must be clear of BRICK/METAL
-    // Only check the elbow tile (first step of each path)
+    // Check each path - if ANY tile in path is BRICK/METAL/BOMB, path is blocked
+    // At least one path must be completely clear
     let path0Blocked = false, path1Blocked = false;
 
-    // Path 0 elbow
-    const step0 = paths[0][0];
-    const px0 = x + step0.x;
-    const py0 = y + step0.y;
-    let tile0;
-    if (px0 >= 0 && px0 < width && py0 >= 0 && py0 < height) {
-        tile0 = board[py0][px0];
-    } else if (offBoardTiles && offBoardTiles.has(`${px0},${py0}`)) {
-        tile0 = offBoardTiles.get(`${px0},${py0}`);
-    } else {
-        tile0 = TileType.EMPTY; // Off-board is void
-    }
-    if (tile0 === TileType.BRICK || tile0 === TileType.METAL) {
-        path0Blocked = true;
+    // Path 0 - check all intermediate tiles
+    for (const step of paths[0]) {
+        const px = x + step.x;
+        const py = y + step.y;
+        let tile;
+        if (px >= 0 && px < width && py >= 0 && py < height) {
+            tile = board[py][px];
+        } else if (offBoardTiles && offBoardTiles.has(`${px},${py}`)) {
+            tile = offBoardTiles.get(`${px},${py}`);
+        } else {
+            tile = TileType.EMPTY; // Off-board is void
+        }
+        if (tile === TileType.BRICK || tile === TileType.METAL || tile === TileType.BOMB) {
+            path0Blocked = true;
+            break;
+        }
     }
 
-    // Path 1 elbow
-    const step1 = paths[1][0];
-    const px1 = x + step1.x;
-    const py1 = y + step1.y;
-    let tile1;
-    if (px1 >= 0 && px1 < width && py1 >= 0 && py1 < height) {
-        tile1 = board[py1][px1];
-    } else if (offBoardTiles && offBoardTiles.has(`${px1},${py1}`)) {
-        tile1 = offBoardTiles.get(`${px1},${py1}`);
-    } else {
-        tile1 = TileType.EMPTY; // Off-board is void
-    }
-    if (tile1 === TileType.BRICK || tile1 === TileType.METAL) {
-        path1Blocked = true;
+    // Path 1 - check all intermediate tiles
+    for (const step of paths[1]) {
+        const px = x + step.x;
+        const py = y + step.y;
+        let tile;
+        if (px >= 0 && px < width && py >= 0 && py < height) {
+            tile = board[py][px];
+        } else if (offBoardTiles && offBoardTiles.has(`${px},${py}`)) {
+            tile = offBoardTiles.get(`${px},${py}`);
+        } else {
+            tile = TileType.EMPTY; // Off-board is void
+        }
+        if (tile === TileType.BRICK || tile === TileType.METAL || tile === TileType.BOMB) {
+            path1Blocked = true;
+            break;
+        }
     }
 
     // If both paths blocked, move is illegal
@@ -205,10 +214,23 @@ export function canKnightMove(board, x, y, dx, dy, knights = [], carryingKnight 
             return { valid: false, reason: 'Knight occupies target' };
         }
     } else {
-        // Moving off-board - all off-board is void, allow landing but knight will be stuck
+        // Moving off-board - check for built tiles in offBoardTiles
+        let targetTile = TileType.EMPTY;
+        if (offBoardTiles && offBoardTiles.has(`${targetX},${targetY}`)) {
+            targetTile = offBoardTiles.get(`${targetX},${targetY}`);
+        }
+        // Check for void arrow at target
         const voidArrow = voidArrows.find(va => va.x === targetX && va.y === targetY);
         if (voidArrow) {
             return { valid: true, offBoard: true, voidArrow: true, targetX, targetY };
+        }
+        // Can't land on wall/bomb even off-board
+        if (targetTile === TileType.BRICK || targetTile === TileType.METAL || targetTile === TileType.BOMB) {
+            return { valid: false, reason: 'Target blocked by wall/bomb' };
+        }
+        // If target is built tile (not EMPTY), knight can stand and move from there
+        if (targetTile !== TileType.EMPTY) {
+            return { valid: true, offBoard: true, targetX, targetY };
         }
         // Allow landing in off-board void, knight gets stuck
         return { valid: true, offBoard: true, stuckInVoid: true, targetX, targetY };
@@ -714,7 +736,7 @@ export class GameState {
                     this.board[midY][midX] = TileType.EMPTY;
                     this.message = 'Blue arrow shattered cracked tile!';
                     this.addAnimation(new ParticleAnimation(midX, midY, '#8b4513', 6));
-                } else if (midTile === TileType.BRICK || midTile === TileType.METAL) {
+                } else if (midTile === TileType.BRICK || midTile === TileType.METAL || midTile === TileType.BOMB) {
                     // Blue arrow bounces off walls (1 space back from start)
                     targetX = startX - dirVec.x;
                     targetY = startY - dirVec.y;
@@ -725,13 +747,47 @@ export class GameState {
 
         // Check target
         if (targetX < 0 || targetX >= this.width || targetY < 0 || targetY >= this.height) {
-            // Arrow into off-board void - allow landing (knight gets stuck)
-            knight.x = targetX;
-            knight.y = targetY;
-            this.message = 'Knight pushed into void!';
-            this.saveState();
-            this.checkWinCondition();
-            return;
+            // Arrow into off-board - check for built tiles
+            let targetTile = TileType.EMPTY;
+            if (this.offBoardTiles && this.offBoardTiles.has(`${targetX},${targetY}`)) {
+                targetTile = this.offBoardTiles.get(`${targetX},${targetY}`);
+            }
+            // Can't push into wall/bomb even off-board
+            if (targetTile === TileType.BRICK || targetTile === TileType.METAL || targetTile === TileType.BOMB) {
+                if (distance === 2) {
+                    // Blue arrow bounces 1 back from start
+                    targetX = startX - dirVec.x;
+                    targetY = startY - dirVec.y;
+                    // Check if bounce position is valid
+                    if (targetX < 0 || targetX >= this.width || targetY < 0 || targetY >= this.height) {
+                        this.message = 'Blue arrow blocked!';
+                        return;
+                    }
+                    const bounceTile = this.board[targetY][targetX];
+                    if (blockedTiles.includes(bounceTile)) {
+                        this.message = 'Blue arrow blocked!';
+                        return;
+                    }
+                } else {
+                    // Green arrow cancels
+                    this.message = 'Arrow blocked by wall/bomb!';
+                    return;
+                }
+            } else if (targetTile !== TileType.EMPTY) {
+                // Land on built off-board tile (solid ground)
+                knight.x = targetX;
+                knight.y = targetY;
+                this.handleTileInteraction(knight, targetX, targetY);
+                return;
+            } else {
+                // Arrow into off-board void - knight gets stuck
+                knight.x = targetX;
+                knight.y = targetY;
+                this.message = 'Knight pushed into void!';
+                this.saveState();
+                this.checkWinCondition();
+                return;
+            }
         }
 
         const targetTile = this.board[targetY][targetX];
@@ -799,7 +855,7 @@ export class GameState {
                         this.board[midY][midX] = TileType.EMPTY;
                         this.message = 'Blue arrow shattered cracked tile!';
                         this.addAnimation(new ParticleAnimation(midX, midY, '#8b4513', 6));
-                    } else if (midTile === TileType.BRICK || midTile === TileType.METAL) {
+                    } else if (midTile === TileType.BRICK || midTile === TileType.METAL || midTile === TileType.BOMB) {
                         // Blue arrow bounces off walls - bounce back 1 from current position
                         const bounceX = currentX - dirVec.x;
                         const bounceY = currentY - dirVec.y;
@@ -824,7 +880,59 @@ export class GameState {
 
             // Check target
             if (nextX < 0 || nextX >= this.width || nextY < 0 || nextY >= this.height) {
-                // Pushed off-board - check for return void arrow (pushes back toward board)
+                // Pushed off-board - check for built tiles first
+                let targetTile = TileType.EMPTY;
+                if (this.offBoardTiles && this.offBoardTiles.has(`${nextX},${nextY}`)) {
+                    targetTile = this.offBoardTiles.get(`${nextX},${nextY}`);
+                }
+                // Can't push into wall/bomb even off-board
+                if (targetTile === TileType.BRICK || targetTile === TileType.METAL || targetTile === TileType.BOMB) {
+                    if (distance === 2) {
+                        // Blue arrow bounces 1 back from current position
+                        const bounceX = currentX - dirVec.x;
+                        const bounceY = currentY - dirVec.y;
+                        if (bounceX < 0 || bounceX >= this.width || bounceY < 0 || bounceY >= this.height) {
+                            this.message = 'Blue void arrow blocked!';
+                            return;
+                        }
+                        const bounceTile = this.board[bounceY][bounceX];
+                        if (blockedTiles.includes(bounceTile)) {
+                            this.message = 'Blue void arrow blocked!';
+                            return;
+                        }
+                        // Move to bounce position and stop
+                        knight.x = bounceX;
+                        knight.y = bounceY;
+                        this.message = 'Blue void arrow bounced off wall!';
+                        this.handleTileInteraction(knight, bounceX, bounceY);
+                        return;
+                    } else {
+                        // Green void arrow hits a wall
+                        const isFirstPush = currentX === startX && currentY === startY;
+                        if (isFirstPush) {
+                            this.message = 'Void arrow blocked by adjacent wall!';
+                            return;
+                        }
+                        const hasOtherSolidGround = lastSolidX !== startX || lastSolidY !== startY;
+                        const stopX = hasOtherSolidGround ? lastSolidX : startX;
+                        const stopY = hasOtherSolidGround ? lastSolidY : startY;
+                        knight.x = stopX;
+                        knight.y = stopY;
+                        this.message = 'Void arrow stopped by wall!';
+                        if (!hasOtherSolidGround) {
+                            return;
+                        }
+                        this.handleTileInteraction(knight, stopX, stopY);
+                        return;
+                    }
+                } else if (targetTile !== TileType.EMPTY) {
+                    // Land on built off-board tile (solid ground) - stop pushing
+                    knight.x = nextX;
+                    knight.y = nextY;
+                    this.handleTileInteraction(knight, nextX, nextY);
+                    return;
+                }
+                // Check for return void arrow (pushes back toward board)
                 const voidArrow = this.voidArrows.find(va => va.x === nextX && va.y === nextY);
                 if (voidArrow) {
                     // Move knight to off-board position first, then handle void arrow return
@@ -936,46 +1044,109 @@ export class GameState {
     }
 
     handleVoidArrow(knight, voidArrow) {
-        // Void arrow pushes knight back toward board
-        const dir = this.getDirFromVoidArrow(voidArrow);
-        let x = knight.x;
-        let y = knight.y;
+        // Void arrows push in their VISUAL direction (like normal arrows)
+        // Continues pushing until hitting solid ground (non-void, non-wall)
+        const dirVec = this.dirToVec(voidArrow.dir);
+        let currentX = knight.x;
+        let currentY = knight.y;
+        const visited = new Set();
+        visited.add(`${currentX},${currentY}`);
 
-        // Move back until on board
-        while (x < 0 || x >= this.width || y < 0 || y >= this.height) {
-            x += dir.x;
-            y += dir.y;
-        }
+        this.message = 'Void arrow pushing!';
 
-        if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
-            const tile = this.board[y][x];
-            // Can't land on void (EMPTY), walls, or bombs
-            if (tile !== TileType.EMPTY && tile !== TileType.BRICK && tile !== TileType.METAL && tile !== TileType.BOMB) {
-                knight.x = x;
-                knight.y = y;
-                this.handleTileInteraction(knight, x, y);
-            } else {
-                // Landed on invalid tile - lost in void
-                this.status = 'lost';
-                this.message = 'Lost in the void!';
+        while (true) {
+            // Calculate next position (distance = 1, like green arrow)
+            const nextX = currentX + dirVec.x;
+            const nextY = currentY + dirVec.y;
+
+            // Check if next position is off-board
+            if (nextX < 0 || nextX >= this.width || nextY < 0 || nextY >= this.height) {
+                // Check for built tiles off-board first
+                let targetTile = TileType.EMPTY;
+                if (this.offBoardTiles && this.offBoardTiles.has(`${nextX},${nextY}`)) {
+                    targetTile = this.offBoardTiles.get(`${nextX},${nextY}`);
+                }
+                // Can't push into wall/bomb even off-board
+                if (targetTile === TileType.BRICK || targetTile === TileType.METAL || targetTile === TileType.BOMB) {
+                    // Hit a wall - stop at current position
+                    if (currentX === knight.x && currentY === knight.y) {
+                        this.message = 'Void arrow blocked by adjacent wall!';
+                        return { valid: true, stuckInVoid: true };
+                    }
+                    knight.x = currentX;
+                    knight.y = currentY;
+                    this.message = 'Void arrow stopped by wall!';
+                    this.handleTileInteraction(knight, currentX, currentY);
+                    return { valid: true, stuckInVoid: true };
+                } else if (targetTile !== TileType.EMPTY) {
+                    // Land on built off-board tile (solid ground)
+                    knight.x = nextX;
+                    knight.y = nextY;
+                    this.handleTileInteraction(knight, nextX, nextY);
+                    return { valid: true };
+                }
+                // Check for return void arrow at off-board position
+                const returnVoidArrow = this.voidArrows.find(va => va.x === nextX && va.y === nextY);
+                if (returnVoidArrow) {
+                    // Move to off-board position, then handle return arrow recursively
+                    knight.x = nextX;
+                    knight.y = nextY;
+                    return this.handleVoidArrow(knight, returnVoidArrow);
+                }
+                // No return arrow - knight goes into off-board void
+                knight.x = nextX;
+                knight.y = nextY;
+                this.message = 'Knight pushed into void!';
+                this.saveState();
+                this.checkWinCondition();
+                return { valid: true, offBoard: true };
             }
-        } else {
-            // Shouldn't happen, but safety check
-            this.status = 'lost';
-            this.message = 'Lost in the void!';
+
+            const targetTile = this.board[nextY][nextX];
+            // BRICK, METAL, BOMB block void arrows
+            const blockedTiles = [TileType.BRICK, TileType.METAL, TileType.BOMB];
+
+            if (blockedTiles.includes(targetTile)) {
+                // Hit a wall - stop at current position (last valid tile)
+                if (currentX === knight.x && currentY === knight.y) {
+                    // Wall is immediately adjacent - void arrow cannot push
+                    this.message = 'Void arrow blocked by adjacent wall!';
+                    return { valid: true, stuckInVoid: true };
+                }
+                // Stop at last valid position (which is void/EMPTY)
+                knight.x = currentX;
+                knight.y = currentY;
+                this.message = 'Void arrow stopped by wall!';
+                this.handleTileInteraction(knight, currentX, currentY);
+                return { valid: true, stuckInVoid: true };
+            }
+
+            // Move knight to next position
+            knight.x = nextX;
+            knight.y = nextY;
+            currentX = nextX;
+            currentY = nextY;
+
+            // If landed on solid ground (not EMPTY), stop and check interactions
+            if (targetTile !== TileType.EMPTY) {
+                this.handleTileInteraction(knight, currentX, currentY);
+                return { valid: true };
+            }
+
+            // Landed on void (EMPTY) - continue loop to push further
+            // Infinite loop protection
+            const posKey = `${currentX},${currentY}`;
+            if (visited.has(posKey)) {
+                this.message = 'Void arrow loop detected!';
+                return { valid: true, stuckInVoid: true };
+            }
+            visited.add(posKey);
         }
     }
 
     getDirFromVoidArrow(voidArrow) {
-        // Return the direction the void arrow PUSHES (opposite to where it points, toward the board)
-        // Void arrow at top (y=-1) pointing UP pushes DOWN toward board
-        switch (voidArrow.dir) {
-            case Dir.UP: return { x: 0, y: 1 };    // Arrow points up, pushes down
-            case Dir.DOWN: return { x: 0, y: -1 };  // Arrow points down, pushes up
-            case Dir.LEFT: return { x: 1, y: 0 };   // Arrow points left, pushes right
-            case Dir.RIGHT: return { x: -1, y: 0 }; // Arrow points right, pushes left
-        }
-        return { x: 0, y: 0 };
+        // Return the direction the void arrow PUSHES (visual direction, like normal arrows)
+        return this.dirToVec(voidArrow.dir);
     }
 
     handlePortal(knight, x, y, portalTile) {
@@ -1249,7 +1420,7 @@ export class GameState {
         }
 
         const tile = this.board[newY][newX];
-        if (tile === TileType.BRICK || tile === TileType.METAL) {
+        if (tile === TileType.BRICK || tile === TileType.METAL || tile === TileType.BOMB) {
             return { valid: false, reason: 'Blocked' };
         }
 

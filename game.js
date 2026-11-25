@@ -525,9 +525,18 @@ class ICKPGame {
 
         const result = this.gameState.moveKnight(knight, dx, dy);
         if (result.valid) {
-            // Keep knight selected for chaining moves, recompute destinations from new position
-            this.validDestinations = [];
-            this.computeValidDestinations(knight);
+            // Check if chain should end: knight stuck in void, off-board, or out of moves
+            const movesExhausted = !this.gameState.infiniteMoves && this.gameState.movesUsed >= this.gameState.maxMoves;
+            const knightStuckInVoid = result.stuckInVoid || result.offBoard;
+
+            if (knightStuckInVoid || movesExhausted) {
+                // End selection chain
+                this.clearSelection();
+            } else {
+                // Keep knight selected for chaining moves, recompute destinations from new position
+                this.validDestinations = [];
+                this.computeValidDestinations(knight);
+            }
             this.updateUI();
             this.checkGameEnd();
 
