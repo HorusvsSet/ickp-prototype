@@ -29,7 +29,7 @@ export class Renderer {
 
         // Colors
         this.colors = {
-            bg: '#0f0f23',
+            bg: '#0a0a14',
             grid: '#1a1a3a',
             normal: '#2d2d4a',
             normalHighlight: '#3d3d5a',
@@ -274,16 +274,9 @@ export class Renderer {
 
         switch (tileType) {
             case TileType.EMPTY:
-                // Draw void - dark with subtle pattern
-                this.ctx.fillStyle = '#050510';
+                // Draw void - same as background, no grid/pattern
+                this.ctx.fillStyle = this.colors.bg;
                 this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-                // Void stars
-                this.ctx.fillStyle = '#1a1a3a';
-                for (let i = 0; i < 3; i++) {
-                    const sx = rect.x + (x * 7 + y * 11 + i * 13) % rect.w;
-                    const sy = rect.y + (x * 17 + y * 5 + i * 19) % rect.h;
-                    this.ctx.fillRect(sx, sy, 1, 1);
-                }
                 break;
 
             case TileType.NORMAL:

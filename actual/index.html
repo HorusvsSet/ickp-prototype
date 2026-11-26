@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>120 Increasingly Cursed Knight Puzzles</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <header class="game-header">
+            <h1 class="editor-title">120 <span class="cursed">ICKP</span></h1>
+            <div class="header-controls">
+                <div class="level-selector">
+                    <button id="prevLevelBtn" class="btn ghost" title="Previous Level (←)" aria-label="Previous Level">←</button>
+                    <select id="levelSelect" aria-label="Select level"></select>
+                    <button id="nextLevelBtn" class="btn ghost" title="Next Level (→)" aria-label="Next Level">→</button>
+                    <input type="number" id="levelIdInput" min="1" max="121" value="1" aria-label="Level ID" style="width: 60px; text-align: center;">
+                </div>
+                <div class="move-counter" id="moveCounter">Moves: 0 / 0</div>
+            </div>
+        </header>
+
+        <main class="game-main">
+            <div class="board-wrapper">
+                <div class="board-toolbar">
+                    <div class="board-toolbar-group">
+                        <button id="undoBtn" class="tool-btn kbd" data-kbd="Z" title="Undo (Z)" aria-label="Undo"><span class="btn-icon">↶</span></button>
+                        <button id="resetBtn" class="tool-btn kbd" data-kbd="R" title="Reset Level (R)" aria-label="Reset"><span class="btn-icon">↺</span></button>
+                        <button id="waitBtn" class="tool-btn kbd" data-kbd="Space" title="Wait / Pass Turn (Space)" aria-label="Wait"><span class="btn-icon">⏸</span></button>
+                    </div>
+                    <div class="board-toolbar-group">
+                        <div class="toolbar-spacer"></div>
+                    </div>
+                    <div class="board-toolbar-group">
+                        <button id="exportBtn" class="tool-btn" title="Export Save" aria-label="Export"><span class="btn-icon">💾</span></button>
+                        <button id="importBtn" class="tool-btn" title="Import Save" aria-label="Import"><span class="btn-icon">📁</span></button>
+                        <input type="file" id="importFile" accept=".json" style="display:none">
+                    </div>
+                </div>
+
+                <div class="board-canvas-container" style="background: radial-gradient(ellipse at center, var(--bg-canvas) 0%, var(--bg-deep) 100%);">
+                    <canvas id="gameCanvas" class="game-canvas"></canvas>
+                </div>
+
+                <div class="board-info">
+                    <span>🏰 <strong id="knightCount">0</strong></span>
+                    <span>🏁 <strong id="flagCount">0</strong></span>
+                    <span>💰 <strong id="coinCount">0</strong></span>
+                    <span>⚡ <strong id="toolCount">0</strong></span>
+                    <span id="globalToolsIndicator" style="display:none; color: var(--accent); font-size:0.6rem;">Global Tools</span>
+                </div>
+            </div>
+
+            <div class="inventory-bar" id="inventoryBar">
+                <div class="inventory-tools" id="inventoryTools"></div>
+            </div>
+
+            <div class="status-bar">
+                <span id="statusMessage" class="status-message">Click a knight, then click destination</span>
+                <span id="progressStats" class="progress-stats">0/120</span>
+            </div>
+        </main>
+
+        <div id="levelCompleteModal" class="modal-overlay">
+            <div class="modal">
+                <h3 class="modal-title">Level Complete!</h3>
+                <p id="completeMessage"></p>
+                <div class="modal-actions">
+                    <button id="modalNextLevelBtn" class="btn primary">Next Level</button>
+                    <button id="replayLevelBtn" class="btn">Replay</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="importModal" class="modal-overlay">
+            <div class="modal">
+                <h3 class="modal-title">Import Save Data</h3>
+                <p>This will replace your current progress. Continue?</p>
+                <div class="modal-actions">
+                    <button id="confirmImportBtn" class="btn danger">Yes, Import</button>
+                    <button id="cancelImportBtn" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <script type="module" src="game.js"></script>
+        <footer class="version-footer">
+            <span>v2.0.0</span>
+            <span>120 ICKP</span>
+            <span class="version-number">Prototype</span>
+        </footer>
+    </div>
+</body>
+</html>

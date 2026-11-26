@@ -1,0 +1,439 @@
+================================================================================
+120 INCREASINGLY CURSED KNIGHT PUZZLES (ICKP)
+================================================================================
+Documentación completa del proyecto - Versión 2.0.0
+Fecha: 2025-11-25
+
+================================================================================
+1. VISIÓN GENERAL
+================================================================================
+Juego de puzzles basado en movimiento de caballo de ajedrez (movimiento en L)
+con 121 niveles distribuidos en 7 capítulos progresivos.
+
+Características principales:
+- Motor vanilla JS ES6 modules (sin frameworks)
+- Canvas 2D pixel-art con devicePixelRatio para crisp rendering
+- 60 FPS fluid animations
+- Responsive: mobile-first, funciona en PC y móvil
+- Persistencia localStorage (auto-save + export/import)
+- Historia de 100 estados (undo con Z)
+
+================================================================================
+2. ARQUITECTURA DE ARCHIVOS
+================================================================================
+
+ickp/
+├── index.html        (4.3 KB)  - Estructura HTML, canvas, UI, inventory bar
+├── styles.css        (16 KB)   - Layout flexbox centrado, responsive, temas
+├── levels.js         (85 KB)   - 121 niveles, 7 capítulos, enums TileType/Dir
+├── engine.js         (62 KB)   - GameState, física, movimiento, validaciones
+├── game.js           (32 KB)   - Game loop, render loop, InputHandler, UI
+├── renderer.js       (131 KB)  - Canvas rendering, sprites, animaciones
+└── PROJECT_DOCUMENTATION.txt   - Este archivo
+
+================================================================================
+3. SISTEMA DE TILES (TileType enum en levels.js)
+================================================================================
+
+SUELO BÁSICO:
+  0  EMPTY          - Vacío (on-board hole / off-board void)
+  1  NORMAL         - Suelo normal transitable
+  2  CRACKED        - Agrietado (se rompe al salir → EMPTY)
+  3  BRICK          - Ladrillo (destructible con martillo, bloquea todo)
+  4  METAL          - Metal (indestructible, bloquea todo)
+
+ENTIDADES ESTÁTICAS:
+  5  FLAG           - Bandera general (cualquier caballo)
+  6  FLAG_WHITE     - Bandera blanca (solo caballo blanco)
+  7  FLAG_BLACK     - Bandera negra (solo caballo negro)
+  8  COIN           - Moneda (debe recogerse todas para ganar)
+
+FLECHAS NORMALES (on-board):
+  9  ARROW_GREEN_UP          13 ARROW_GREEN_LEFT
+  10 ARROW_GREEN_RIGHT       14 ARROW_GREEN_DOWN
+  11 ARROW_BLUE_UP           15 ARROW_BLUE_LEFT
+  12 ARROW_BLUE_RIGHT        16 ARROW_BLUE_DOWN
+
+  Verdes: empujan 1 casilla en su dirección
+  Azules: empujan 2 casillas, rebotan en paredes (BRICK/METAL/BOMB)
+
+FLECHAS VOID (off-board / sobre EMPTY):
+  17 ARROW_GREEN_VOID_UP     21 ARROW_GREEN_VOID_LEFT
+  18 ARROW_GREEN_VOID_RIGHT  22 ARROW_GREEN_VOID_DOWN
+  19 ARROW_BLUE_VOID_UP      23 ARROW_BLUE_VOID_LEFT
+  20 ARROW_BLUE_VOID_RIGHT   24 ARROW_BLUE_VOID_DOWN
+
+  Comportamiento: empujan CONTINUAMENTE en dirección visual
+  hasta encontrar suelo sólido (no-EMPTY, no-wall)
+
+ESPECIALES:
+  25 ARROW_4WAY      - Flecha 4 direcciones (player elige dir al aterrizar)
+  26 PORTAL_RED      31 PORTAL_YELLOW
+  27 PORTAL_BLUE     32 PORTAL_PURPLE
+  28 PORTAL_GREEN    33 PORTAL_ORANGE
+  29 PORTAL_WHITE    (entrada/salida por color)
+  30 PORTAL_BLACK
+
+  34 TRAFFIC_LIGHT_GREEN
+  35 TRAFFIC_LIGHT_RED   - Semáforo (rojo rebota, verde pasa)
+  36 BUTTON              - Botón (detona todas las bombas)
+  37 BOMB                - Bomba (bloquea movimiento, destruible por botón)
+
+PIEZAS DE AJEDREZ (capturables):
+  38 CHESS_PAWN   41 CHESS_QUEEN
+  39 CHESS_BISHOP 42 CHESS_KING
+  40 CHESS_ROOK
+
+HERRAMIENTAS (ToolType):
+  HAMMER      - Construye en EMPTY/CRACKED (on/off-board), destruye BRICK
+  ARROW_UP/R/D/L - Coloca flecha verde direccional
+  BOOT        - Movimiento ortogonal 1 casilla (usa 1 move)
+  PORTAL_GUN  - Coloca portal pair
+
+================================================================================
+4. MECÁNICAS DE MOVIMIENTO
+================================================================================
+
+4.1 MOVIMIENTO CABALLO (Knight Move)
+------------------------------------
+- 8 direcciones en L: (±2, ±1) y (±1, ±2)
+- Validación DUAL-PATH: el caballo tiene 2 posibles trayectorias en L
+  Path 0: Primero 2 en eje principal, luego 1 perpendicular (codo en mitad)
+  Path 1: Primero 1 en eje secundario, luego 2 perpendicular (codo al final)
+- BLOQUEO: Si AMBOS codos (elbow tiles) tienen BRICK/METAL/BOMB → movimiento ILEGAL
+- Al menos 1 camino libre = movimiento VÁLIDO
+- Esto permite "esquivar" esquinas de paredes
+
+4.2 VACÍO (EMPTY / Off-board)
+-----------------------------
+- EMPTY en tablero = agujero (vacío transitable pero te quedas pillado)
+- Fuera del tablero = todo es vacío infinito
+- Caballos en vacío: NO pueden moverse por sí solos
+- Escape: martillo construye suelo, o flecha (normal/void) te empuja
+- Al aterrizar en vacío: knight.stuckInVoid = true, cadena de selección termina
+
+4.3 FLECHAS NORMALES
+--------------------
+VERDE (1 casilla):
+  - Empuja 1 casilla en dirección de la flecha
+  - Bloqueada por BRICK/METAL/BOMB en target → cancela push
+  - En void: empuja 1 y para (knight se queda en void)
+
+AZUL (2 casillas):
+  - Empuja 2 casillas
+  - Casilla intermedia (mid-tile):
+    * CRACKED → la rompe (→ EMPTY)
+    * BRICK/METAL/BOMB → REBOTE 1 casilla ATRÁS desde inicio
+  - Target final:
+    * BRICK/METAL/BOMB → REBOTE 1 atrás desde inicio
+    * EMPTY/void → aterriza ahí (stuckInVoid)
+  - Recursivo: si cae en otra flecha, se encadena
+
+4.4 FLECHAS VOID (Void Arrows)
+------------------------------
+- Visual: igual que flechas normales pero sobre fondo void
+- Comportamiento: PUSH CONTINUO hasta suelo sólido
+- Distancia: 1 (verde) o 2 (azul) por iteración
+- Loop:
+  1. Calcula next position (current + dirVec * distance)
+  2. Blue: check mid-tile (CRACKED→rompe, WALL→rebote)
+  3. Target:
+     * WALL (BRICK/METAL/BOMB):
+       - Blue: rebote 1 atrás desde current
+       - Verde: para en lastSolidGround (último suelo no-void)
+     * EMPTY/void: continúa loop
+     * Sólido (NORMAL, COIN, FLAG, etc): para, handleTileInteraction
+  4. Off-board: check voidArrows array para return arrows
+  5. Protección anti-loop infinito (visited Set)
+
+4.5 HERRAMIENTAS
+----------------
+MARTILLO (Hammer):
+  - Build (left-click): EMPTY/CRACKED → NORMAL (on-board)
+    Off-board: guarda en offBoardTiles Map
+  - Destroy (right-click): BRICK → NORMAL (solo ladrillo)
+  - No puede destruir METAL ni BOMB ni NORMAL
+
+FLECHAS (Arrows): 4 direcciones
+  - Coloca ARROW_GREEN_[DIR] en EMPTY/NORMAL/CRACKED (on/off-board)
+  - Consume 1 flecha del inventario por dirección
+
+BOTA (Boot): 1 uso = 1 move
+  - Movimiento ortogonal 1 casilla (UP/DOWN/LEFT/RIGHT)
+  - Bloqueado por BRICK/METAL/BOMB y bordes/void
+  - No puede usarse para "saltar" al vacío
+
+PISTOLA PORTALES (Portal Gun): coloca pares de portales por color
+
+================================================================================
+5. ENTIDADES DINÁMICAS
+================================================================================
+
+CABALLOS (Knights):
+  - Propiedades: id, x, y, color (white/black), atFlag, hasCoin,
+    carriedCoin, carriedKnight, elevation, coinsCollected
+  - Caballo blanco ≠ caballo negro (sprites distintos)
+  - Pueden cargarse mutuamente (Chapter 2+): aterrizar sobre otro caballo
+    lo "recoge" (elevation=1), se mueven juntos
+  - Selección: click en caballo → resalta destinos válidos → click destino
+  - Cadena: tras mover, caballo permanece seleccionado para encadenar
+  - Fin cadena: click fuera, sin moves, o aterriza en void
+
+BANDERAS (Flags):
+  - 3 tipos: normal (gold), blanca (corona), negra (calavera)
+  - Victoria: todos los caballos en banderas correctas + monedas
+
+MONEDAS (Coins):
+  - Al aterrizar en COIN: se recoge automáticamente (si capacidad)
+  - knight.hasCoin, knight.coinsCollected
+  - Win condition: TODAS las monedas recogidas ANTES de banderas
+
+PIEZAS AJEDREZ:
+  - Captura al aterrizar encima (caballo come pieza)
+  - Pieza captured=true, tile→NORMAL
+
+PORTALES:
+  - 6 colores: red, blue, green, yellow, purple, orange
+  - Entrada → teletransporta a salida del mismo color
+  - knight.onPortal = true temporal
+
+SEMÁFOROS (Traffic Lights):
+  - Estados: green / red (alternan con Wait o cada move)
+  - Rojo: rebota al caballo 1 casilla atrás
+  - Verde: paso libre
+
+BOTONES/BOMBAS:
+  - Botón (BUTTON): al pisar → detona TODAS las bombas (BOMB→NORMAL)
+  - Bomba: bloquea movimiento (como wall), destructible solo por botón
+
+TETHERS (Amarras):
+  - Conectan 2 caballos (knightA, knightB, length)
+  - Distancia Chebyshev max = length
+  - Si excede: ladrillo entre ellos → tether se rompe
+  - Sino: previene movimiento (pull)
+
+FLECHAS VOID EXTERNAS (voidArrows array):
+  - Definidas en level data: {x, y, dir} fuera del board
+  - Permiten navegar por el vacío off-board
+  - Return arrows: void arrows que apuntan HACIA el tablero
+
+================================================================================
+6. SISTEMA DE CAPÍTULOS (7 Chapters)
+================================================================================
+
+Chapter I: The Basics (1-15)      - Movimiento básico, paredes, flechas
+Chapter II: Dual Knights (16-30)  - 2 caballos, carry mechanic
+Chapter III: Tools (31-45)        - Martillo, flechas, botas
+Chapter IV: Void (46-60)          - Vacío on/off-board, void arrows
+Chapter V: Mechanics (61-75)      - Portales, semáforos, botones, bombas
+Chapter VI: Chess (76-90)         - Piezas ajedrez, tethers, 4-way arrows
+Chapter VII: Cursed (91-121)      - Global tools, recursive, star jump, etc.
+
+Progresión: tools persistentes globalTools=true (Chapter 7+)
+Nivel 121: Abstract shape (cross con agujeros EMPTY)
+
+================================================================================
+7. CONDICIONES VICTORIA / DERROTA
+================================================================================
+
+WIN:
+  1. TODAS las monedas recogidas (coins.every(c => c.collected))
+  2. TODAS las banderas ocupadas por caballo correcto
+     - Flag general: cualquier color
+     - Flag blanca: solo caballo blanco
+     - Flag negra: solo caballo negro
+  3. status = 'won', muestra modal "Level Complete!"
+
+LOSS:
+  - movesUsed >= maxMoves Y ningún caballo en bandera
+  - status = 'lost', mensaje "Out of moves!"
+
+================================================================================
+8. SISTEMA DE GUARDADO (SaveManager)
+================================================================================
+
+localStorage keys:
+  - ickp_save_data: { version, timestamp, currentLevel, completedLevels[],
+                      gameState (serializado), globalTools }
+  - ickp_global_tools: { hammer, arrows, boot, portalGun } (Chapter 7+)
+
+Auto-save: cada move válido, tool use, wait, reset
+Export/Import: JSON file download/upload
+Undo: 100 estados en history array (Z key)
+
+Serialización GameState.toJSON() / static fromJSON()
+
+================================================================================
+9. INPUT HANDLING (InputHandler)
+================================================================================
+
+MOUSE / TOUCH:
+  - Click en caballo → select (highlight valid moves)
+  - Click en destino válido → execute move
+  - Click fuera → deselect
+  - Drag: visual feedback durante arrastre
+  - Tool placement mode: click en tile → place tool
+
+TECLADO:
+  Z / Ctrl+Z      - Undo
+  R               - Reset level
+  Space           - Wait / Pass turn
+  1               - Select Hammer
+  2/3/4/5         - Select Arrow Up/Right/Down/Left
+  6               - Select Boot
+  Escape          - Cancel tool placement / Deselect
+
+================================================================================
+10. RENDERER (renderer.js)
+================================================================================
+
+Canvas setup:
+  - devicePixelRatio aware (crisp en retina/high-DPI)
+  - resize() sincroniza canvas.width/height con CSS size * dpr
+  - ctx.scale(dpr, dpr) para dibujar en coordenadas lógicas
+
+Tile rendering (drawTile):
+  - Flat design, subtle depth solo en bordes (no 3D exagerado)
+  - NORMAL: base color + subtle highlight/top edge
+  - CRACKED: patrón grietas estático (sin animación de línea)
+  - BRICK: patrón ladrillos simétrico (mismo patrón filas par/impar)
+  - METAL: placa metálica con tornillos, reflejo
+  - EMPTY: void negro con borde sutil + swirl animation
+  - COIN: oro visible sobre tile base (sparkle)
+  - FLAG: 3 variantes visuales distintas (normal/white/black)
+  - ARROWS: sprite simple, sin rotación, sin glow, sin partículas
+  - 4-WAY: 4 flechas estáticas en cruz, sin animación core/ring
+  - PORTAL: anillo coloreado + swirl
+  - TRAFFIC_LIGHT: poste + luz redonda verde/roja
+  - BUTTON/BOMB: menos flashy, muestra tile base debajo
+  - CHESS: siluetas pixel-art reconocibles
+
+Entity rendering:
+  - Knights: white vs black distinct sprites (casco/armadura distinta)
+  - Carried knight: offset elevation + pequeño
+  - Coins: collected = no render
+  - Particles: sistema genérico ParticleAnimation
+
+Animaciones (clases):
+  - ParticleAnimation: partículas genéricas (color, count, gravity)
+  - KnightMoveAnimation: interpolación suave L-shape
+  - ScreenShakeAnimation: trauma-based (reduced intensity)
+  - TileTransitionAnimation: cracked→empty, build, destroy
+  - ArrowPulseAnimation: sutil pulse en flechas normales
+  - VoidSwirlAnimation: vórtice en tiles EMPTY
+  - CoinCollectAnimation: partículas doradas + scale
+  - FlagReachAnimation: partículas color bandera
+  - ArrowActivationAnimation: flash direccional
+  - PortalTeleportAnimation: swirl entrada/salida
+
+================================================================================
+11. GAME LOOP (game.js)
+================================================================================
+
+Game class:
+  - init(): carga nivel, crea GameState, InputHandler, Renderer
+  - loadLevel(levelId): nuevo GameState, restore global tools si Chapter 7+
+  - gameLoop(timestamp): requestAnimationFrame loop
+    - update(dt): animations, traffic lights timers
+    - render(): renderer.draw(gameState)
+  - UI updates: move counter, chapter indicator, level select, inventory
+
+Inventory Bar (debajo del board):
+  - Solo muestra herramientas con count > 0
+  - Hammer, Arrows (4 dirs), Boot, Portal Gun
+  - Click tool → placingMode, click board → place
+  - Selected tool highlight
+
+Level Navigation:
+  - Prev/Next buttons + dropdown selector (1-121)
+  - Next level button en modal win
+  - Chapter indicator auto-update
+
+================================================================================
+12. PARED DETECTION - CONSISTENCY FIXES (v2.0.0)
+================================================================================
+
+TODAS las comprobaciones de pared usan: BRICK || METAL || BOMB
+
+✅ canKnightMove (engine.js:154, 170) - ambos codos (path 0 y 1)
+✅ pushKnight (engine.js:717, 740) - mid-tile blue + target
+✅ pushKnightVoidLoop (engine.js:802, 811, 847) - mid-tile blue + bounce + target
+✅ handleVoidArrow (engine.js:975) - target
+✅ useBoot (engine.js:1291) - target tile
+✅ Traffic light bounce (engine.js:670) - prevTile check
+✅ useHammer destroy (engine.js:1208) - solo BRICK (intencional)
+
+El caballo NUNCA puede:
+- Saltar sobre pared (dual-path bloquea si ambos codos walled)
+- Atravesar pared con flechas (target + mid-tile checks)
+- Ser empujado a través de pared por void arrows (continuous push stops)
+- Usar bota para entrar en pared/bomba
+
+================================================================================
+13. KNOWN EDGE CASES / BEHAVIORS
+================================================================================
+
+- Off-board tiles: almacenados en Map offBoardTiles (key="x,y")
+- Hammer build off-board: crea NORMAL en offBoardTiles
+- Arrow place off-board: crea ARROW_GREEN_[DIR] en offBoardTiles
+- Void arrow return: voidArrows array check al ir off-board
+- Cracked departure: al salir de CRACKED → board[y][x] = EMPTY
+- Knight carry: elevation=1, carriedBy=id, se mueve junto al carrier
+- Star jump (Chapter 7): movimiento reina 2 casillas 8 dirs (no knight)
+- Recursive levels: nivel dentro de nivel (designMode)
+- Undo clears animations
+- Global tools persist across levels (Chapter 7+)
+
+================================================================================
+14. TESTING CHECKLIST
+================================================================================
+
+□ Movimiento caballo L-shape (8 dirs)
+□ Dual-path wall blocking (brick/metal/bomb en codos)
+□ No wall jumping (caballo se para ante pared)
+□ Green arrow push 1 (blocked by walls)
+□ Blue arrow push 2 (mid-tile cracked destroy, wall bounce)
+□ Void arrows continuous push until solid ground
+□ Void arrow off-board return arrows
+□ Hammer build EMPTY/CRACKED on/off-board
+□ Hammer destroy BRICK only
+□ Arrow placement 4 dirs
+□ Boot orthogonal move (blocked by walls/bomb)
+□ Portal teleport same color
+□ Traffic light red bounce / green pass
+□ Button detonates all bombs
+□ Coin collection (all required for win)
+□ Flag types (normal/white/black matching)
+□ Chess piece capture
+□ Tether distance enforcement
+□ Knight carry mechanic
+□ Win condition (coins + flags)
+□ Loss condition (out of moves)
+□ Undo (Z) 100 states
+□ Auto-save / Export / Import
+□ Level navigation prev/next/dropdown
+□ Mobile touch controls
+□ Canvas centered responsive
+□ 60 FPS animations fluid
+
+================================================================================
+15. COMANDOS DE DESARROLLO
+================================================================================
+
+# Servidor local
+cd C:/Users/Usuario/ickp
+python -m http.server 8080
+# Abrir http://localhost:8080/
+
+# Verificar sintaxis JS
+node --check engine.js
+node --check game.js
+node --check renderer.js
+node --check levels.js
+
+# Backup manual
+cp -r ickp ickp_backup_$(date +%Y%m%d_%H%M%S)
+
+================================================================================
+FIN DE DOCUMENTACIÓN
+================================================================================

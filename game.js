@@ -29,6 +29,7 @@ class ICKPGame {
         // UI Elements
         this.elements = {
             levelSelect: document.getElementById('levelSelect'),
+            levelIdInput: document.getElementById('levelIdInput'),
             moveCounter: document.getElementById('moveCounter'),
             undoBtn: document.getElementById('undoBtn'),
             resetBtn: document.getElementById('resetBtn'),
@@ -37,7 +38,6 @@ class ICKPGame {
             importBtn: document.getElementById('importBtn'),
             importFile: document.getElementById('importFile'),
             statusMessage: document.getElementById('statusMessage'),
-            chapterIndicator: document.getElementById('chapterIndicator'),
             inventoryTools: document.getElementById('inventoryTools'),
             progressStats: document.getElementById('progressStats'),
             levelCompleteModal: document.getElementById('levelCompleteModal'),
@@ -48,8 +48,7 @@ class ICKPGame {
             importModal: document.getElementById('importModal'),
             confirmImportBtn: document.getElementById('confirmImportBtn'),
             cancelImportBtn: document.getElementById('cancelImportBtn'),
-            prevLevelBtn: document.getElementById('prevLevelBtn'),
-            devInfiniteMovesBtn: document.getElementById('devInfiniteMovesBtn')
+            prevLevelBtn: document.getElementById('prevLevelBtn')
         };
 
         this.init();
@@ -60,6 +59,26 @@ class ICKPGame {
         this.bindUIEvents();
         this.bindCanvasEvents();
         this.bindKeyboardEvents();
+
+        // Check for test level from editor
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('test') === '1') {
+            const testData = sessionStorage.getItem('ickp_test_level');
+            if (testData) {
+                try {
+                    const testLevel = JSON.parse(testData);
+                    sessionStorage.removeItem('ickp_test_level');
+                    this.loadTestLevel(testLevel);
+                    this.resizeCanvas();
+                    this.startRenderLoop();
+                    window.addEventListener('resize', () => this.resizeCanvas());
+                    return;
+                } catch (e) {
+                    console.error('Failed to load test level:', e);
+                }
+            }
+        }
+
         this.loadSave();
         this.resizeCanvas();
         this.startRenderLoop();
@@ -95,6 +114,15 @@ class ICKPGame {
             this.loadLevel(parseInt(e.target.value));
         });
 
+        // Level ID input
+        this.elements.levelIdInput.addEventListener('change', (e) => {
+            const val = parseInt(e.target.value);
+            if (val >= 1 && val <= 121) {
+                this.elements.levelSelect.value = val;
+                this.loadLevel(val);
+            }
+        });
+
         // Level navigation
         this.elements.prevLevelBtn.addEventListener('click', () => this.prevLevel());
         this.elements.nextLevelBtn.addEventListener('click', () => this.nextLevel());
@@ -103,9 +131,6 @@ class ICKPGame {
         this.elements.undoBtn.addEventListener('click', () => this.undo());
         this.elements.resetBtn.addEventListener('click', () => this.resetLevel());
         this.elements.waitBtn.addEventListener('click', () => this.wait());
-
-        // Dev buttons
-        this.elements.devInfiniteMovesBtn.addEventListener('click', () => this.toggleInfiniteMoves());
 
         // Save/Load
         this.elements.exportBtn.addEventListener('click', () => this.exportSave());
@@ -169,15 +194,14 @@ class ICKPGame {
 
     resizeCanvas() {
         const container = this.canvas.parentElement;
+        // Use container's actual size (CSS handles layout via flexbox)
         const width = container.clientWidth;
-        // Calculate available height: viewport - header - inventory - status
-        const headerHeight = 60;
-        const inventoryHeight = 90;
-        const statusHeight = 36;
-        const height = Math.max(300, window.innerHeight - headerHeight - inventoryHeight - statusHeight - 20);
-        this.canvas.width = width;
-        this.canvas.height = height;
-        this.renderer.resize(width, height);
+        const height = container.clientHeight;
+        // Ensure minimum size
+        const minSize = 300;
+        this.canvas.width = Math.max(minSize, width);
+        this.canvas.height = Math.max(minSize, height);
+        this.renderer.resize(this.canvas.width, this.canvas.height);
     }
 
     // ================================================================
@@ -220,6 +244,29 @@ class ICKPGame {
         this.renderer.animations = [];
     }
 
+    loadTestLevel(testLevel) {
+        this.currentLevel = testLevel.id || 999;
+        this.clearSelection();
+
+        const tools = { ...testLevel.tools };
+        this.gameState = new GameState({ ...testLevel, tools });
+
+        // Set up renderer callbacks
+        this.renderer.setCallbacks({
+            getSelectedKnight: () => this.selectedKnight,
+            getValidDestinations: () => this.validDestinations,
+            getHoverTile: () => this.hoverTile,
+            getPlacingTool: () => this.placingTool,
+            getRenderInfo: () => this.renderer.getRenderInfo()
+        });
+
+        this.updateUI();
+        this.updateLevelSelect();
+        this.renderer.animations = [];
+
+        this.elements.statusMessage.textContent = 'Test Level - Click a knight, then click destination';
+    }
+
     nextLevel() {
         const nextId = this.currentLevel + 1;
         if (getLevel(nextId)) {
@@ -232,15 +279,6 @@ class ICKPGame {
         const prevId = this.currentLevel - 1;
         if (getLevel(prevId)) {
             this.loadLevel(prevId);
-        }
-    }
-
-    toggleInfiniteMoves() {
-        if (this.gameState) {
-            this.gameState.infiniteMoves = !this.gameState.infiniteMoves;
-            this.elements.devInfiniteMovesBtn.classList.toggle('selected', this.gameState.infiniteMoves);
-            this.elements.devInfiniteMovesBtn.textContent = this.gameState.infiniteMoves ? '∞✓' : '∞';
-            this.showMessage(this.gameState.infiniteMoves ? 'Infinite moves ON' : 'Infinite moves OFF');
         }
     }
 
@@ -578,7 +616,7 @@ class ICKPGame {
         }
 
         this.elements.completeMessage.textContent = `Completed in ${this.gameState.movesUsed}/${this.gameState.maxMoves} moves!`;
-        this.elements.levelCompleteModal.classList.remove('hidden');
+        this.elements.levelCompleteModal.classList.add('open');
         this.updateLevelSelect();
         this.updateUI();
     }
@@ -653,11 +691,11 @@ class ICKPGame {
     }
 
     showImportModal() {
-        this.elements.importModal.classList.remove('hidden');
+        this.elements.importModal.classList.add('open');
     }
 
     hideImportModal() {
-        this.elements.importModal.classList.add('hidden');
+        this.elements.importModal.classList.remove('open');
         this.pendingImport = null;
     }
 
@@ -672,7 +710,7 @@ class ICKPGame {
     }
 
     hideLevelCompleteModal() {
-        this.elements.levelCompleteModal.classList.add('hidden');
+        this.elements.levelCompleteModal.classList.remove('open');
     }
 
     // ================================================================
@@ -696,16 +734,28 @@ class ICKPGame {
         this.elements.undoBtn.disabled = this.gameState.history.length <= 1;
         this.elements.waitBtn.disabled = !this.gameState.canWait;
 
-        // Dev button state
-        this.elements.devInfiniteMovesBtn.classList.toggle('selected', this.gameState.infiniteMoves);
-        this.elements.devInfiniteMovesBtn.textContent = this.gameState.infiniteMoves ? '∞✓' : '∞';
-
         // Status
         this.elements.statusMessage.textContent = this.gameState.message || (this.selectedKnight ? 'Click destination to move' : 'Click a knight to select');
 
-        // Chapter
-        const chapterInfo = getChapterInfo(this.gameState.chapter);
-        this.elements.chapterIndicator.textContent = chapterInfo.name;
+        // Board info bar
+        const knightCountEl = document.getElementById('knightCount');
+        const flagCountEl = document.getElementById('flagCount');
+        const coinCountEl = document.getElementById('coinCount');
+        const toolCountEl = document.getElementById('toolCount');
+        const globalToolsIndicatorEl = document.getElementById('globalToolsIndicator');
+
+        if (knightCountEl) knightCountEl.textContent = this.gameState.knights.length;
+        if (flagCountEl) flagCountEl.textContent = this.gameState.flags.length;
+        if (coinCountEl) coinCountEl.textContent = this.gameState.coins.length;
+        if (toolCountEl) {
+            const totalTools = (this.gameState.tools.hammer || 0) +
+                Object.values(this.gameState.tools.arrows || {}).reduce((a, b) => a + b, 0) +
+                (this.gameState.tools.boot || 0) + (this.gameState.tools.portalGun || 0);
+            toolCountEl.textContent = totalTools;
+        }
+        if (globalToolsIndicatorEl) {
+            globalToolsIndicatorEl.style.display = this.gameState.globalTools ? 'inline' : 'none';
+        }
 
         // Inventory Bar (only tools with count > 0)
         this.renderInventoryBar();
@@ -770,6 +820,9 @@ class ICKPGame {
             const completed = this.completedLevels.has(levelId);
             option.textContent = option.textContent.replace(/ ✓$/, '') + (completed ? ' ✓' : '');
             if (levelId === this.currentLevel) option.selected = true;
+        }
+        if (this.elements.levelIdInput) {
+            this.elements.levelIdInput.value = this.currentLevel;
         }
     }
 

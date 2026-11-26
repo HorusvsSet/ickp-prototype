@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICKP Level Editor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --editor-bg: #0a0a14;
+            --editor-panel: #16213e;
+            --editor-panel-hover: #1e2d5e;
+            --editor-border: #2a3a5a;
+            --editor-accent: #00d4aa;
+            --editor-accent-dim: #00d4aa40;
+            --editor-text: #e8e8f0;
+            --editor-text-dim: #8a8ab8;
+            --editor-danger: #ff6b6b;
+            --editor-warning: #ffd93d;
+            --editor-info: #6bcbff;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --transition-fast: 150ms ease-out;
+            --transition-normal: 250ms ease-out;
+            --shadow-panel: 0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px var(--editor-border);
+        }
+
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'JetBrains Mono', monospace; background: var(--editor-bg); color: var(--editor-text); min-height: 100vh; overflow: hidden; }
+
+        .editor-root { display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: 1fr 340px; height: 100vh; gap: 0; }
+
+        /* Header */
+        .editor-header { grid-column: 1 / -1; background: linear-gradient(180deg, #111320, #0a0a14); border-bottom: 1px solid var(--editor-border); padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; z-index: 100; }
+        .editor-title { font-family: 'Press Start 2P', cursive; font-size: 0.85rem; background: linear-gradient(90deg, var(--editor-accent), var(--editor-info), var(--editor-warning)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: 0.02em; }
+        .editor-header-center { flex: 1; display: flex; justify-content: center; gap: 1rem; }
+        .level-nav { display: flex; align-items: center; gap: 0.5rem; }
+        .level-nav select { padding: 0.5rem 2rem 0.5rem 1rem; background: var(--editor-panel); border: 1px solid var(--editor-border); border-radius: var(--radius-sm); color: var(--editor-text); font-family: inherit; font-size: 0.75rem; min-width: 180px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2300d4aa' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }
+        .level-nav input { width: 60px; padding: 0.5rem; text-align: center; background: var(--editor-panel); border: 1px solid var(--editor-border); border-radius: var(--radius-sm); color: var(--editor-text); font-family: inherit; font-size: 0.75rem; }
+        .header-actions { display: flex; gap: 0.5rem; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--editor-border); border-radius: var(--radius-sm); background: var(--editor-panel); color: var(--editor-text); font-family: inherit; font-size: 0.7rem; cursor: pointer; transition: all var(--transition-fast); display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+        .btn:hover { background: var(--editor-panel-hover); border-color: var(--editor-accent); }
+        .btn:active { transform: scale(0.98); }
+        .btn.primary { background: linear-gradient(180deg, var(--editor-accent), #00b890); border-color: var(--editor-accent); color: var(--editor-bg); font-weight: 700; }
+        .btn.primary:hover { box-shadow: 0 0 20px var(--editor-accent-dim); }
+        .btn.danger { background: linear-gradient(180deg, var(--editor-danger), #e05555); border-color: var(--editor-danger); color: var(--editor-bg); }
+        .btn.ghost { background: transparent; }
+        .btn-icon { font-size: 0.85rem; line-height: 1; }
+
+        /* Footer */
+        .editor-footer { grid-column: 1 / -1; background: #080810; border-top: 1px solid var(--editor-border); padding: 0.5rem 1.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: var(--editor-text-dim); z-index: 100; }
+        .footer-status { display: flex; gap: 1.5rem; align-items: center; }
+        .status-item { display: flex; align-items: center; gap: 0.35rem; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--editor-text-dim); }
+        .status-dot.active { background: var(--editor-accent); box-shadow: 0 0 8px var(--editor-accent); animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* Left: Center Grid Area */
+        .editor-center { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; padding: 1rem; gap: 0.75rem; overflow: hidden; min-height: 0; }
+        .board-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.5rem; background: var(--editor-panel); border: 1px solid var(--editor-border); border-radius: var(--radius-md); }
+        .tool-btn { width: 36px; height: 36px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--editor-text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all var(--transition-fast); position: relative; font-size: 1rem; }
+        .tool-btn:hover { background: var(--editor-panel-hover); color: var(--editor-text); border-color: var(--editor-border); }
+        .tool-btn.active { background: var(--editor-accent-dim); border-color: var(--editor-accent); color: var(--editor-accent); }
+        .tool-btn.kbd::after { content: attr(data-kbd); position: absolute; bottom: -2px; right: -2px; font-size: 0.5rem; background: var(--editor-bg); color: var(--editor-accent); padding: 0 2px; border-radius: 2px; font-family: inherit; opacity: 0.7; }
+        .toolbar-spacer { flex: 1; }
+        .selected-tool-display { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; background: var(--editor-accent-dim); border: 1px solid var(--editor-accent); border-radius: var(--radius-sm); font-size: 0.65rem; color: var(--editor-accent); min-width: 200px; }
+        .selected-tool-display .tool-preview { width: 24px; height: 24px; border-radius: 4px; background: var(--editor-bg); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+
+        .board-canvas-container { flex: 1; background: radial-gradient(ellipse at center, #111320 0%, #080810 100%); border: 1px solid var(--editor-border); border-radius: var(--radius-md); overflow: hidden; position: relative; display: flex; justify-content: center; align-items: center; }
+        .board-canvas-container::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 1; }
+        .board-canvas-container canvas { image-rendering: pixelated; image-rendering: crisp-edges; z-index: 2; }
+        .board-info { display: flex; gap: 1rem; padding: 0.5rem; background: var(--editor-panel); border: 1px solid var(--editor-border); border-radius: var(--radius-md); font-size: 0.65rem; color: var(--editor-text-dim); flex-wrap: wrap; }
+        .board-info span { display: flex; align-items: center; gap: 0.35rem; }
+        .board-info strong { color: var(--editor-text); }
+
+        /* Right: Palette Panel */
+        .palette-panel { grid-column: 2; grid-row: 2; background: var(--editor-panel); border-left: 1px solid var(--editor-border); display: flex; flex-direction: column; overflow: hidden; }
+        .palette-header { padding: 0.75rem 1rem; background: linear-gradient(180deg, var(--editor-panel-hover), var(--editor-panel)); border-bottom: 1px solid var(--editor-border); display: flex; align-items: center; justify-content: space-between; }
+        .palette-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--editor-text-dim); display: flex; align-items: center; gap: 0.5rem; }
+        .palette-body { flex: 1; overflow-y: auto; padding: 0.75rem; }
+        .chapter-section { margin-bottom: 1.5rem; }
+        .chapter-title { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--editor-text-dim); margin-bottom: 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--editor-border); display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; }
+        .chapter-title:hover { color: var(--editor-accent); }
+        .chapter-title .chevron { transition: transform var(--transition-fast); }
+        .chapter-section.collapsed .chapter-title .chevron { transform: rotate(-90deg); }
+        .chapter-content { display: flex; flex-direction: column; gap: 0.35rem; }
+        .chapter-section.collapsed .chapter-content { display: none; }
+
+        .palette-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--editor-bg); border: 1px solid var(--editor-border); border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition-fast); }
+        .palette-item:hover { border-color: var(--editor-accent); background: var(--editor-panel-hover); }
+        .palette-item.selected { border-color: var(--editor-accent); background: var(--editor-accent-dim); box-shadow: 0 0 12px var(--editor-accent-dim); }
+        .palette-item-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--editor-panel); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; overflow: hidden; }
+        .palette-item-icon canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+        .palette-item-info { flex: 1; min-width: 0; }
+        .palette-item-name { font-size: 0.7rem; font-weight: 500; color: var(--editor-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .palette-item-desc { font-size: 0.55rem; color: var(--editor-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Shortcuts Hint */
+        .shortcuts-hint { display: flex; flex-wrap: wrap; gap: 0.35rem; font-size: 0.55rem; color: var(--editor-text-dim); padding-top: 0.75rem; border-top: 1px solid var(--editor-border); margin-top: 1rem; }
+        .kbd { padding: 0.15rem 0.4rem; background: var(--editor-bg); border: 1px solid var(--editor-border); border-radius: 4px; font-family: inherit; color: var(--editor-accent); font-weight: 700; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--editor-panel); border: 1px solid var(--editor-border); border-radius: var(--radius-md); padding: 0.75rem 1.5rem; font-size: 0.7rem; z-index: 2000; box-shadow: var(--shadow-panel); opacity: 0; transition: all var(--transition-normal); display: flex; align-items: center; gap: 0.5rem; }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { border-color: var(--editor-accent); }
+        .toast.error { border-color: var(--editor-danger); }
+        .toast.warning { border-color: var(--editor-warning); }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem; opacity: 0; visibility: hidden; transition: all var(--transition-normal); }
+        .modal-overlay.open { opacity: 1; visibility: visible; }
+        .modal-overlay .modal { background: var(--editor-panel); border: 1px solid var(--editor-border); border-radius: var(--radius-lg); padding: 1.5rem; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; transform: scale(0.95); transition: transform var(--transition-normal); box-shadow: var(--shadow-panel); }
+        .modal-overlay.open .modal { transform: scale(1); }
+        .modal-title { font-size: 0.75rem; font-weight: 700; color: var(--editor-accent); margin-bottom: 1rem; }
+        .modal-textarea { width: 100%; min-height: 300px; padding: 1rem; background: var(--editor-bg); border: 1px solid var(--editor-border); border-radius: var(--radius-md); color: var(--editor-text); font-family: inherit; font-size: 0.7rem; line-height: 1.5; resize: vertical; }
+        .modal-textarea:focus { outline: none; border-color: var(--editor-accent); }
+        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .editor-root { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; }
+            .palette-panel { grid-column: 1; grid-row: 2; border-left: none; border-top: 1px solid var(--editor-border); max-height: 400px; }
+            .editor-center { grid-row: 3; padding: 0.75rem; }
+        }
+        @media (max-width: 768px) {
+            .board-toolbar { gap: 0.25rem; }
+            .tool-btn { width: 32px; height: 32px; }
+            .selected-tool-display { min-width: 150px; font-size: 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-root">
+        <!-- Header -->
+        <header class="editor-header">
+            <h1 class="editor-title">ICKP Level Editor</h1>
+            <div class="editor-header-center">
+                <div class="level-nav">
+                    <button class="btn ghost" id="prevLevelBtn" title="Previous Level (←)" aria-label="Previous Level">←</button>
+                    <select id="levelSelect" aria-label="Select level"></select>
+                    <button class="btn ghost" id="nextLevelBtn" title="Next Level (→)" aria-label="Next Level">→</button>
+                    <input type="number" id="levelIdInput" min="1" max="121" value="1" aria-label="Level ID" style="width: 60px; text-align: center;">
+                </div>
+                <div class="level-meta" style="display:flex;align-items:center;gap:0.5rem;margin-left:1rem;">
+                    <input type="text" id="levelNameInput" placeholder="Level name" value="New Level" style="width:180px;padding:0.4rem;background:var(--editor-panel);border:1px solid var(--editor-border);border-radius:4px;color:var(--editor-text);font-family:inherit;font-size:0.7rem;">
+                    <select id="levelChapterInput" style="padding:0.4rem;background:var(--editor-panel);border:1px solid var(--editor-border);border-radius:4px;color:var(--editor-text);font-family:inherit;font-size:0.7rem;">
+                        <option value="1">Ch 1: The Basics</option>
+                        <option value="2">Ch 2: Knights, Plural</option>
+                        <option value="3">Ch 3: The Knight's Friends</option>
+                        <option value="4">Ch 4: Advanced Chess</option>
+                        <option value="5">Ch 5: The Family</option>
+                        <option value="6">Ch 6: Playtesters' Puzzles</option>
+                        <option value="7">Ch 7: Long Distance</option>
+                    </select>
+                    <input type="number" id="levelMovesInput" min="1" max="999" value="10" style="width:60px;padding:0.4rem;background:var(--editor-panel);border:1px solid var(--editor-border);border-radius:4px;color:var(--editor-text);font-family:inherit;font-size:0.7rem;text-align:center;" title="Max moves">
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn primary" id="newLevelBtn"><span class="btn-icon">➕</span> New</button>
+                <button class="btn" id="saveLevelBtn"><span class="btn-icon">💾</span> Save (localStorage)</button>
+                <button class="btn" id="exportLevelBtn"><span class="btn-icon">📤</span> Export JSON</button>
+                <button class="btn primary" id="saveToLevelsJsBtn" style="background: linear-gradient(180deg, var(--editor-info), #4ab3e0); border-color: var(--editor-info); color: var(--editor-bg);"><span class="btn-icon">📝</span> Save to levels.js</button>
+                <button class="btn" id="importLevelBtn"><span class="btn-icon">📥</span> Import</button>
+                <input type="file" id="importFile" accept=".json" style="display:none">
+                <button class="btn primary" id="testLevelBtn" style="background: linear-gradient(180deg, var(--editor-warning), #e8c000); color: var(--editor-bg); border-color: var(--editor-warning);"><span class="btn-icon">▶</span> Test Play</button>
+                <button class="btn ghost" id="backToGameBtn"><span class="btn-icon">←</span> Game</button>
+            </div>
+        </header>
+
+        <!-- Center: Drawing Grid -->
+        <main class="editor-center">
+            <div class="board-toolbar">
+                <div class="board-toolbar-group">
+                    <button class="tool-btn kbd" data-mode="pencil" data-kbd="P" title="Pencil (P)" aria-label="Pencil Mode">✏️</button>
+                    <button class="tool-btn kbd" data-mode="eraser" data-kbd="E" title="Eraser (E)" aria-label="Eraser Mode">🧽</button>
+                    <button class="tool-btn kbd" data-mode="select" data-kbd="V" title="Select/Move (V)" aria-label="Select Mode">🖱</button>
+                    <button class="tool-btn kbd" id="undoBtn" data-kbd="Z" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+                    <button class="tool-btn kbd" id="redoBtn" data-kbd="Y" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+                </div>
+                <div class="board-toolbar-group">
+                    <div class="toolbar-spacer"></div>
+                </div>
+                <div class="board-toolbar-group">
+                    <button class="tool-btn kbd" id="zoomOutBtn" data-kbd="-" title="Zoom Out (-)" aria-label="Zoom Out">−</button>
+                    <span id="zoomDisplayToolbar" style="display:inline-flex;align-items:center;padding:0 0.5rem;font-size:0.7rem;color:var(--editor-text);">100%</span>
+                    <button class="tool-btn kbd" id="zoomInBtn" data-kbd="=" title="Zoom In (=)" aria-label="Zoom In">+</button>
+                    <button class="tool-btn kbd" id="resetViewBtn" data-kbd="R" title="Reset View (R)" aria-label="Reset View">⌂</button>
+                </div>
+                <div class="board-toolbar-group">
+                    <span style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.65rem;color:var(--editor-text-dim);">Grid (max 18x18):</span>
+                    <input type="number" id="gridWidthInput" min="5" max="18" value="18" style="width:50px;padding:0.25rem;background:var(--editor-panel);border:1px solid var(--editor-border);border-radius:4px;color:var(--editor-text);font-family:inherit;font-size:0.65rem;text-align:center;">
+                    <span style="color:var(--editor-text-dim);">×</span>
+                    <input type="number" id="gridHeightInput" min="5" max="18" value="18" style="width:50px;padding:0.25rem;background:var(--editor-panel);border:1px solid var(--editor-border);border-radius:4px;color:var(--editor-text);font-family:inherit;font-size:0.65rem;text-align:center;">
+                    <button class="tool-btn" id="resizeGridBtn" title="Resize Grid" aria-label="Resize Grid">⟳</button>
+                </div>
+                <div class="board-toolbar-group">
+                    <div class="selected-tool-display" id="selectedToolDisplay">
+                        <div class="tool-preview" id="toolPreview"></div>
+                        <span id="toolName">Select a tile from the palette</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="board-canvas-container" id="boardContainer">
+                <canvas id="editorCanvas"></canvas>
+            </div>
+
+            <div class="board-info">
+                <span><strong>Grid:</strong> <span id="gridSizeDisplay">20×15</span></span>
+                <span><strong>Zoom:</strong> <span id="zoomDisplay">100%</span></span>
+                <span><strong>Mode:</strong> <span id="modeDisplay" class="mode-tag">Pencil</span></span>
+                <span><strong>Tiles:</strong> <span id="tileCount">0</span></span>
+                <span><strong>Cell:</strong> <span id="hoverCell">-</span></span>
+            </div>
+        </main>
+
+        <!-- Right: Palette Panel -->
+        <aside class="palette-panel" id="palettePanel">
+            <div class="palette-header">
+                <span class="palette-title">Palette <span class="chevron">▼</span></span>
+            </div>
+            <div class="palette-body" id="paletteBody"></div>
+            <div class="shortcuts-hint">
+                <div><span class="kbd">P</span> Pencil  <span class="kbd">E</span> Eraser  <span class="kbd">V</span> Select</div>
+                <div><span class="kbd">MMB</span>/<span class="kbd">Space+Drag</span> Pan  <span class="kbd">Ctrl+Wheel</span> Zoom  <span class="kbd">Ctrl+S</span> Save</div>
+                <div><span class="kbd">Del</span> Clear to void  <span class="kbd">←/→</span> Prev/Next level  <span class="kbd">R</span> Reset view</div>
+            </div>
+        </aside>
+
+        <!-- Footer -->
+        <footer class="editor-footer">
+            <span>ICKP Editor — Chapter-based palette, freeform grid drawing</span>
+            <div class="footer-status">
+                <div class="status-item"><span class="status-dot" id="saveStatusDot"></span><span id="saveStatus">Saved</span></div>
+                <div class="status-item"><span class="status-dot active"></span><span>Ready</span></div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"><span class="toast-icon"></span><span class="toast-message"></span></div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <h3 class="modal-title">Import Level</h3>
+            <textarea class="modal-textarea" id="importTextarea" placeholder="Paste JSON here..."></textarea>
+            <div class="modal-actions">
+                <button class="btn primary" id="confirmImportBtn">Import</button>
+                <button class="btn" id="cancelImportBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal">
+            <h3 class="modal-title">Export Level JSON</h3>
+            <textarea class="modal-textarea" id="exportTextarea" readonly></textarea>
+            <div class="modal-actions">
+                <button class="btn" id="copyExportBtn"><span class="btn-icon">📋</span> Copy</button>
+                <button class="btn" id="downloadExportBtn"><span class="btn-icon">💾</span> Download</button>
+                <button class="btn" id="closeExportBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="testModal">
+        <div class="modal">
+            <h3 class="modal-title">Test Level</h3>
+            <p style="color: var(--editor-text-dim); margin-bottom: 1rem;">This will open the level in the game. Save first?</p>
+            <div class="modal-actions">
+                <button class="btn primary" id="confirmTestBtn">Save & Test</button>
+                <button class="btn" id="cancelTestBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { TileType, Dir, KnightColor, ToolType, Chapters, Levels, getLevel, getLevelsByChapter } from './levels.js';
+
+        // ============================================================================
+        // PALETTE DATA - Organized by Chapter
+        // ============================================================================
+        const CHAPTER_PALETTES = {
+            1: { // Chapter 1: The Basics
+                name: 'Chapter 1: The Basics',
+                levels: 35,
+                items: [
+                    { type: 'tile', tileType: TileType.NORMAL, name: 'Normal Tile', desc: 'Standard walkable tile', icon: 'tile' },
+                    { type: 'tile', tileType: TileType.CRACKED, name: 'Cracked Tile', desc: 'Breaks after landing', icon: 'cracked' },
+                    { type: 'tile', tileType: TileType.EMPTY, name: 'Void/Hole', desc: 'Empty space - knight falls', icon: 'void' },
+                    { type: 'entity', entityType: 'knight', color: KnightColor.WHITE, name: 'White Knight', desc: 'Player knight', icon: 'knight_white' },
+                    { type: 'entity', entityType: 'knight', color: KnightColor.BLACK, name: 'Black Knight', desc: 'Black knight', icon: 'knight_black' },
+                    { type: 'entity', entityType: 'knight', color: KnightColor.RED, name: 'Red Knight', desc: 'Red knight', icon: 'knight_red' },
+                    { type: 'entity', entityType: 'knight', color: KnightColor.BLUE, name: 'Blue Knight', desc: 'Blue knight', icon: 'knight_blue' },
+                    { type: 'entity', entityType: 'knight', color: KnightColor.GREEN, name: 'Green Knight', desc: 'Green knight', icon: 'knight_green' },
+                    { type: 'entity', entityType: 'knight', color: KnightColor.YELLOW, name: 'Yellow Knight', desc: 'Yellow knight', icon: 'knight_yellow' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.WHITE, name: 'White Flag', desc: 'Goal for white knight', icon: 'flag_white' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.BLACK, name: 'Black Flag', desc: 'Goal for black knight', icon: 'flag_black' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.RED, name: 'Red Flag', desc: 'Goal for red knight', icon: 'flag_red' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.BLUE, name: 'Blue Flag', desc: 'Goal for blue knight', icon: 'flag_blue' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.GREEN, name: 'Green Flag', desc: 'Goal for green knight', icon: 'flag_green' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.YELLOW, name: 'Yellow Flag', desc: 'Goal for yellow knight', icon: 'flag_yellow' },
+                    { type: 'entity', entityType: 'coin', name: 'Coin', desc: 'Collectible', icon: 'coin' },
+                ]
+            },
+            2: { // Chapter 2: Knights, Plural
+                name: 'Chapter 2: Knights, Plural',
+                levels: 20,
+                items: [
+                    { type: 'tile', tileType: TileType.BRICK, name: 'Brick Wall', desc: 'Destructible by hammer', icon: 'brick' },
+                    { type: 'tile', tileType: TileType.METAL, name: 'Metal Wall', desc: 'Indestructible', icon: 'metal' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_UP, name: 'Green Arrow ↑', desc: 'Pushes knight 1 space', icon: 'arrow_green_up' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_RIGHT, name: 'Green Arrow →', desc: 'Pushes knight 1 space', icon: 'arrow_green_right' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_DOWN, name: 'Green Arrow ↓', desc: 'Pushes knight 1 space', icon: 'arrow_green_down' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_LEFT, name: 'Green Arrow ←', desc: 'Pushes knight 1 space', icon: 'arrow_green_left' },
+                    { type: 'entity', entityType: 'button', name: 'Button', desc: 'Activates when knight stands on it', icon: 'button' },
+                    { type: 'entity', entityType: 'bomb', name: 'Bomb', desc: 'Explodes when triggered', icon: 'bomb' },
+                ]
+            },
+            3: { // Chapter 3: The Knight's Friends
+                name: 'Chapter 3: The Knight\'s Friends',
+                levels: 5,
+                items: [
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_UP, name: 'Blue Arrow ↑', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_up' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_RIGHT, name: 'Blue Arrow →', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_right' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_DOWN, name: 'Blue Arrow ↓', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_down' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_LEFT, name: 'Blue Arrow ←', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_left' },
+                    { type: 'tile', tileType: TileType.ARROW_4WAY, name: '4-Way Arrow', desc: 'Pushes in all directions', icon: 'arrow_4way' },
+                    { type: 'entity', entityType: 'portal', color: 'red', name: 'Red Portal', desc: 'Teleports to matching portal', icon: 'portal_red' },
+                    { type: 'entity', entityType: 'portal', color: 'blue', name: 'Blue Portal', desc: 'Teleports to matching portal', icon: 'portal_blue' },
+                    { type: 'entity', entityType: 'portal', color: 'green', name: 'Green Portal', desc: 'Teleports to matching portal', icon: 'portal_green' },
+                    { type: 'entity', entityType: 'portal', color: 'yellow', name: 'Yellow Portal', desc: 'Teleports to matching portal', icon: 'portal_yellow' },
+                    { type: 'entity', entityType: 'portal', color: 'purple', name: 'Purple Portal', desc: 'Teleports to matching portal', icon: 'portal_purple' },
+                    { type: 'entity', entityType: 'portal', color: 'orange', name: 'Orange Portal', desc: 'Teleports to matching portal', icon: 'portal_orange' },
+                    { type: 'tool', toolType: 'portalGun', name: 'Portal Gun', desc: 'Creates portal pair', icon: 'portalgun' },
+                ]
+            },
+            4: { // Chapter 4: Advanced Chess
+                name: 'Chapter 4: Advanced Chess',
+                levels: 20,
+                items: [
+                    { type: 'entity', entityType: 'chess', piece: 'pawn', name: 'Pawn', desc: 'Moves like chess pawn', icon: 'chess_pawn' },
+                    { type: 'entity', entityType: 'chess', piece: 'bishop', name: 'Bishop', desc: 'Moves diagonally', icon: 'chess_bishop' },
+                    { type: 'entity', entityType: 'chess', piece: 'rook', name: 'Rook', desc: 'Moves orthogonally', icon: 'chess_rook' },
+                    { type: 'entity', entityType: 'chess', piece: 'queen', name: 'Queen', desc: 'Moves any direction', icon: 'chess_queen' },
+                    { type: 'entity', entityType: 'chess', piece: 'king', name: 'King', desc: 'Moves 1 space any direction', icon: 'chess_king' },
+                    { type: 'entity', entityType: 'traffic', state: 'green', name: 'Traffic Light (Green)', desc: 'Allows passage when green', icon: 'traffic_green' },
+                    { type: 'entity', entityType: 'traffic', state: 'red', name: 'Traffic Light (Red)', desc: 'Blocks passage when red', icon: 'traffic_red' },
+                    { type: 'tool', toolType: 'boot', name: 'Boot', desc: 'Orthogonal move 1 space', icon: 'boot' },
+                ]
+            },
+            5: { // Chapter 5: The Family
+                name: 'Chapter 5: The Family',
+                levels: 15,
+                items: [
+                    { type: 'entity', entityType: 'chess', piece: 'pawn', color: 'white', name: 'White Pawn', desc: 'White chess pawn', icon: 'chess_pawn' },
+                    { type: 'entity', entityType: 'chess', piece: 'bishop', color: 'white', name: 'White Bishop', desc: 'White chess bishop', icon: 'chess_bishop' },
+                    { type: 'entity', entityType: 'chess', piece: 'rook', color: 'white', name: 'White Rook', desc: 'White chess rook', icon: 'chess_rook' },
+                    { type: 'entity', entityType: 'chess', piece: 'queen', color: 'white', name: 'White Queen', desc: 'White chess queen', icon: 'chess_queen' },
+                    { type: 'entity', entityType: 'chess', piece: 'king', color: 'white', name: 'White King', desc: 'White chess king', icon: 'chess_king' },
+                    { type: 'entity', entityType: 'chess', piece: 'pawn', color: 'black', name: 'Black Pawn', desc: 'Black chess pawn', icon: 'chess_pawn' },
+                    { type: 'entity', entityType: 'chess', piece: 'bishop', color: 'black', name: 'Black Bishop', desc: 'Black chess bishop', icon: 'chess_bishop' },
+                    { type: 'entity', entityType: 'chess', piece: 'rook', color: 'black', name: 'Black Rook', desc: 'Black chess rook', icon: 'chess_rook' },
+                    { type: 'entity', entityType: 'chess', piece: 'queen', color: 'black', name: 'Black Queen', desc: 'Black chess queen', icon: 'chess_queen' },
+                    { type: 'entity', entityType: 'chess', piece: 'king', color: 'black', name: 'Black King', desc: 'Black chess king', icon: 'chess_king' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.RED, name: 'Red Flag', desc: 'Goal for red knight', icon: 'flag_red' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.BLUE, name: 'Blue Flag', desc: 'Goal for blue knight', icon: 'flag_blue' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.GREEN, name: 'Green Flag', desc: 'Goal for green knight', icon: 'flag_green' },
+                    { type: 'entity', entityType: 'flag', color: KnightColor.YELLOW, name: 'Yellow Flag', desc: 'Goal for yellow knight', icon: 'flag_yellow' },
+                ]
+            },
+            6: { // Chapter 6: Playtesters' Puzzles
+                name: 'Chapter 6: Playtesters\' Puzzles',
+                levels: 5,
+                items: [
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_UP, name: 'Green Arrow ↑', desc: 'Pushes knight 1 space', icon: 'arrow_green_up' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_RIGHT, name: 'Green Arrow →', desc: 'Pushes knight 1 space', icon: 'arrow_green_right' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_DOWN, name: 'Green Arrow ↓', desc: 'Pushes knight 1 space', icon: 'arrow_green_down' },
+                    { type: 'tile', tileType: TileType.ARROW_GREEN_LEFT, name: 'Green Arrow ←', desc: 'Pushes knight 1 space', icon: 'arrow_green_left' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_UP, name: 'Blue Arrow ↑', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_up' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_RIGHT, name: 'Blue Arrow →', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_right' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_DOWN, name: 'Blue Arrow ↓', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_down' },
+                    { type: 'tile', tileType: TileType.ARROW_BLUE_LEFT, name: 'Blue Arrow ←', desc: 'Pushes knight 2 spaces', icon: 'arrow_blue_left' },
+                    { type: 'entity', entityType: 'button', name: 'Button', desc: 'Activates when knight stands on it', icon: 'button' },
+                    { type: 'entity', entityType: 'bomb', name: 'Bomb', desc: 'Explodes when triggered', icon: 'bomb' },
+                ]
+            },
+            7: { // Chapter 7: Long Distance
+                name: 'Chapter 7: Long Distance',
+                levels: 21,
+                items: [
+                    { type: 'entity', entityType: 'portal', color: 'red', name: 'Red Portal', desc: 'Teleports to matching portal', icon: 'portal_red' },
+                    { type: 'entity', entityType: 'portal', color: 'blue', name: 'Blue Portal', desc: 'Teleports to matching portal', icon: 'portal_blue' },
+                    { type: 'entity', entityType: 'portal', color: 'green', name: 'Green Portal', desc: 'Teleports to matching portal', icon: 'portal_green' },
+                    { type: 'entity', entityType: 'portal', color: 'yellow', name: 'Yellow Portal', desc: 'Teleports to matching portal', icon: 'portal_yellow' },
+                    { type: 'entity', entityType: 'portal', color: 'purple', name: 'Purple Portal', desc: 'Teleports to matching portal', icon: 'portal_purple' },
+                    { type: 'entity', entityType: 'portal', color: 'orange', name: 'Orange Portal', desc: 'Teleports to matching portal', icon: 'portal_orange' },
+                    { type: 'tool', toolType: 'portalGun', name: 'Portal Gun', desc: 'Creates portal pair', icon: 'portalgun' },
+                    { type: 'entity', entityType: 'voidarrow', dir: 0, name: 'Void Arrow ↑', desc: 'Continuous push upward', icon: 'voidarrow_up' },
+                    { type: 'entity', entityType: 'voidarrow', dir: 1, name: 'Void Arrow →', desc: 'Continuous push right', icon: 'voidarrow_right' },
+                    { type: 'entity', entityType: 'voidarrow', dir: 2, name: 'Void Arrow ↓', desc: 'Continuous push down', icon: 'voidarrow_down' },
+                    { type: 'entity', entityType: 'voidarrow', dir: 3, name: 'Void Arrow ←', desc: 'Continuous push left', icon: 'voidarrow_left' },
+                    { type: 'tool', toolType: 'hammer', name: 'Hammer', desc: 'Destroys walls / builds on void', icon: 'hammer' },
+                    { type: 'tool', toolType: 'boot', name: 'Boot', desc: 'Orthogonal move 1 space', icon: 'boot' },
+                    { type: 'tool', toolType: 'arrow_up', name: 'Arrow ↑', desc: 'Places green arrow up', icon: 'arrow_up' },
+                    { type: 'tool', toolType: 'arrow_right', name: 'Arrow →', desc: 'Places green arrow right', icon: 'arrow_right' },
+                    { type: 'tool', toolType: 'arrow_down', name: 'Arrow ↓', desc: 'Places green arrow down', icon: 'arrow_down' },
+                    { type: 'tool', toolType: 'arrow_left', name: 'Arrow ←', desc: 'Places green arrow left', icon: 'arrow_left' },
+                ]
+            },
+        };
+
+        // Chapter metadata for level list
+        const CHAPTER_INFO = {
+            1: { name: 'Chapter I: The Basics', levels: 35, start: 1, end: 35 },
+            2: { name: 'Chapter II: Knights, Plural', levels: 20, start: 36, end: 55 },
+            3: { name: 'Chapter III: The Knight\'s Friends', levels: 5, start: 56, end: 60 },
+            4: { name: 'Chapter IV: Advanced Chess', levels: 20, start: 61, end: 80 },
+            5: { name: 'Chapter V: The Family', levels: 15, start: 81, end: 95 },
+            6: { name: 'Chapter VI: Playtesters\' Puzzles', levels: 5, start: 96, end: 100 },
+            7: { name: 'Chapter VII: Long Distance', levels: 21, start: 101, end: 121 },
+        };
+
+        // ============================================================================
+        // STATE
+        // ============================================================================
+        const state = {
+            levelId: 1,
+            levelName: 'New Level',
+            chapter: 1,
+            maxMoves: 10,
+            // Grid: Map<"x,y"> -> { tileType, entity }
+            grid: new Map(),
+            // Max 18x18 (8x8 playable + 5 void border each side)
+            bounds: { minX: 0, maxX: 17, minY: 0, maxY: 11 }, // 18x12 grid
+            gridWidth: 18,
+            gridHeight: 18,
+            tools: { hammer: 0, arrows: { up: 0, right: 0, down: 0, left: 0 }, boot: 0, portalGun: 0 },
+
+            mode: 'pencil', // pencil, eraser, select
+            selectedPaletteItem: null, // The currently selected palette item
+
+            // Undo/Redo
+            history: [],
+            historyIndex: -1,
+            maxHistory: 50,
+
+            mouseDown: false,
+            mouseRightDown: false,
+            lastCell: { x: -1, y: -1 },
+            hoverCell: { x: -1, y: -1 },
+            panning: false,
+            panStart: { x: 0, y: 0 },
+            offsetX: 0,
+            offsetY: 0,
+            cellSize: 40,
+            zoom: 1,
+            minZoom: 0.3,
+            maxZoom: 3,
+            unsavedChanges: false,
+
+            selection: null, // { x, y, width, height } for select mode
+            selectionStart: null,
+        };
+
+        // ============================================================================
+        // DOM CACHE
+        // ============================================================================
+        const $ = (sel, ctx = document) => ctx.querySelector(sel);
+        const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
+
+        const canvas = $('#editorCanvas');
+        const ctx = canvas.getContext('2d');
+        const boardContainer = $('#boardContainer');
+        const levelSelect = $('#levelSelect');
+        const paletteBody = $('#paletteBody');
+
+        // ============================================================================
+        // INIT
+        // ============================================================================
+        function init() {
+            console.log('ICKP Editor init()');
+            loadLevelList();
+            buildPalette();
+            setupEventListeners();
+            newLevel();
+            resizeCanvas();
+            render();
+            updateUI();
+            console.log('Editor ready');
+        }
+
+        function loadLevelList() {
+            levelSelect.innerHTML = '';
+            for (const [chNum, chapter] of Object.entries(CHAPTER_INFO)) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = chapter.name;
+                for (let i = chapter.start; i <= chapter.end; i++) {
+                    const levelData = getLevel(i);
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = `  ${i}: ${levelData ? levelData.name : 'Unknown'}`;
+                    optgroup.appendChild(opt);
+                }
+                levelSelect.appendChild(optgroup);
+            }
+            levelSelect.value = 1;
+        }
+
+        function buildPalette() {
+            paletteBody.innerHTML = '';
+            try {
+                for (const [chNum, chapter] of Object.entries(CHAPTER_PALETTES)) {
+                    const chapterInfo = CHAPTER_INFO[chNum] || { levels: 0, start: 0, end: 0 };
+                    const section = document.createElement('div');
+                    section.className = 'chapter-section';
+                    section.dataset.chapter = chNum;
+
+                    const title = document.createElement('div');
+                    title.className = 'chapter-title';
+                    title.innerHTML = `<span class="chevron">▼</span> ${chapter.name} <span style="color:var(--editor-text-dim);font-size:0.55rem;font-weight:400;">(${chapterInfo.levels} levels, ${chapterInfo.start}-${chapterInfo.end})</span>`;
+                    title.addEventListener('click', () => {
+                        section.classList.toggle('collapsed');
+                    });
+                    section.appendChild(title);
+
+                    const content = document.createElement('div');
+                    content.className = 'chapter-content';
+
+                    chapter.items.forEach(item => {
+                        const paletteItem = document.createElement('div');
+                        paletteItem.className = 'palette-item';
+                        paletteItem.dataset.item = JSON.stringify(item);
+
+                        const iconDiv = document.createElement('div');
+                        iconDiv.className = 'palette-item-icon';
+                        iconDiv.innerHTML = `<canvas width="32" height="32"></canvas>`;
+                        const iconCanvas = iconDiv.querySelector('canvas');
+                        try {
+                            drawPaletteIcon(iconCanvas.getContext('2d'), item, 32);
+                        } catch (e) {
+                            console.warn('Icon draw error for', item.name, e);
+                            // Fallback: draw a simple colored square
+                            const ctx = iconCanvas.getContext('2d');
+                            ctx.fillStyle = '#00d4aa';
+                            ctx.fillRect(8, 8, 16, 16);
+                        }
+
+                        const infoDiv = document.createElement('div');
+                        infoDiv.className = 'palette-item-info';
+                        infoDiv.innerHTML = `
+                            <div class="palette-item-name">${item.name}</div>
+                            <div class="palette-item-desc">${item.desc}</div>
+                        `;
+
+                        paletteItem.appendChild(iconDiv);
+                        paletteItem.appendChild(infoDiv);
+
+                        paletteItem.addEventListener('click', () => selectPaletteItem(item, paletteItem));
+                        content.appendChild(paletteItem);
+                    });
+
+                    section.appendChild(content);
+                    paletteBody.appendChild(section);
+                }
+                showToast('Palette loaded');
+            } catch (e) {
+                console.error('Palette build error:', e);
+                showToast('Error loading palette: ' + e.message, 'error');
+                // Fallback: create basic palette
+                createFallbackPalette();
+            }
+        }
+
+        function createFallbackPalette() {
+            const basicItems = [
+                { type: 'tile', tileType: 1, name: 'Normal Tile', desc: 'Standard walkable tile' },
+                { type: 'tile', tileType: 4, name: 'Cracked Tile', desc: 'Breaks after landing' },
+                { type: 'tile', tileType: 0, name: 'Void/Hole', desc: 'Empty space' },
+                { type: 'entity', entityType: 'knight', name: 'White Knight', desc: 'Player knight' },
+                { type: 'entity', entityType: 'flag', name: 'White Flag', desc: 'Goal for white knight' },
+                { type: 'entity', entityType: 'coin', name: 'Coin', desc: 'Collectible' },
+            ];
+            const section = document.createElement('div');
+            section.className = 'chapter-section';
+            const title = document.createElement('div');
+            title.className = 'chapter-title';
+            title.innerHTML = `<span class="chevron">▼</span> Basic Tiles (Fallback)`;
+            title.addEventListener('click', () => section.classList.toggle('collapsed'));
+            section.appendChild(title);
+            const content = document.createElement('div');
+            content.className = 'chapter-content';
+            basicItems.forEach(item => {
+                const paletteItem = document.createElement('div');
+                paletteItem.className = 'palette-item';
+                paletteItem.innerHTML = `
+                    <div class="palette-item-icon" style="background:#2a2a4a;border:1px solid #00d4aa;"></div>
+                    <div class="palette-item-info">
+                        <div class="palette-item-name">${item.name}</div>
+                        <div class="palette-item-desc">${item.desc}</div>
+                    </div>
+                `;
+                paletteItem.addEventListener('click', () => {
+                    state.selectedPaletteItem = item;
+                    $$('.palette-item').forEach(el => el.classList.remove('selected'));
+                    paletteItem.classList.add('selected');
+                    updateSelectedToolDisplay();
+                });
+                content.appendChild(paletteItem);
+            });
+            section.appendChild(content);
+            paletteBody.appendChild(section);
+        }
+
+        function drawPaletteIcon(ctx, item, size) {
+            // Use same rendering as main game for perfect consistency
+            ctx.fillStyle = '#0a0a14';
+            ctx.fillRect(0, 0, size, size);
+
+            const s = size;
+            const px = 0;
+            const py = 0;
+
+            if (item.type === 'tile') {
+                // Use drawTile for perfect match with game rendering
+                drawTile(ctx, px, py, s, item.tileType);
+            } else if (item.type === 'entity') {
+                // Draw base tile (normal) then entity on top for perfect match
+                drawTile(ctx, px, py, s, TileType.NORMAL);
+                // Create mock entity object matching game format
+                const entity = { type: item.entityType };
+                if (item.color) entity.color = item.color;
+                if (item.piece) entity.piece = item.piece;
+                if (item.state) entity.state = item.state;
+                if (item.dir !== undefined) entity.dir = item.dir;
+                drawEntity(ctx, px, py, s, entity);
+            } else if (item.type === 'tool') {
+                // Tools: draw on normal tile background with tool icon
+                drawTile(ctx, px, py, s, TileType.NORMAL);
+                ctx.font = `${s * 0.55}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#00d4aa';
+                const icons = { hammer: '🔨', boot: '👢', arrow_up: '⬆️', arrow_right: '➡️', arrow_down: '⬇️', arrow_left: '⬅️', portalGun: '🔫' };
+                ctx.fillText(icons[item.toolType] || '?', s/2, s/2);
+            }
+        }
+
+        function drawArrowIcon(ctx, cx, cy, as, type, color) {
+            let dx = 0, dy = 0;
+            if (type === TileType.ARROW_GREEN_UP || type === TileType.ARROW_BLUE_UP) { dx = 0; dy = -1; }
+            else if (type === TileType.ARROW_GREEN_RIGHT || type === TileType.ARROW_BLUE_RIGHT) { dx = 1; dy = 0; }
+            else if (type === TileType.ARROW_GREEN_DOWN || type === TileType.ARROW_BLUE_DOWN) { dx = 0; dy = 1; }
+            else { dx = -1; dy = 0; }
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(cx + dx * as, cy + dy * as);
+            ctx.lineTo(cx - dy * as * 0.6, cy + dx * as * 0.6);
+            ctx.lineTo(cx + dy * as * 0.6, cy - dx * as * 0.6);
+            ctx.fill();
+        }
+
+        // ============================================================================
+        // EVENT LISTENERS
+        // ============================================================================
+        function setupEventListeners() {
+            // Toolbar mode buttons
+            $$('[data-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.mode = btn.dataset.mode;
+                    updateModeButtons();
+                    updateSelectedToolDisplay();
+                });
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+                const map = { 'p': 'pencil', 'e': 'eraser', 'v': 'select' };
+                if (map[e.key.toLowerCase()]) {
+                    state.mode = map[e.key.toLowerCase()];
+                    updateModeButtons();
+                    updateSelectedToolDisplay();
+                }
+                if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelection(); }
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveLevel(); }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+                if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+                if (e.key === 'ArrowLeft') { navigateLevel(-1); }
+                if (e.key === 'ArrowRight') { navigateLevel(1); }
+                if (e.key === 'r' || e.key === 'R') { resetView(); }
+            });
+
+            // Canvas events
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('mouseleave', onMouseUp);
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+            canvas.addEventListener('wheel', onWheel, { passive: false });
+            boardContainer.addEventListener('wheel', onWheel, { passive: false });
+
+            // Level select
+            levelSelect.addEventListener('change', () => loadLevel(parseInt(levelSelect.value)));
+            $('#levelIdInput').addEventListener('change', (e) => {
+                const v = parseInt(e.target.value);
+                if (v >= 1 && v <= 121) { levelSelect.value = v; loadLevel(v); }
+            });
+            $('#prevLevelBtn').addEventListener('click', () => navigateLevel(-1));
+            $('#nextLevelBtn').addEventListener('click', () => navigateLevel(1));
+
+            // Level metadata
+            $('#levelNameInput').addEventListener('change', (e) => { state.levelName = e.target.value; markUnsaved(); });
+            $('#levelChapterInput').addEventListener('change', (e) => { state.chapter = parseInt(e.target.value); markUnsaved(); });
+            $('#levelMovesInput').addEventListener('change', (e) => { state.maxMoves = parseInt(e.target.value); markUnsaved(); });
+
+            // Action buttons
+            $('#newLevelBtn').addEventListener('click', () => { if (state.unsavedChanges && !confirm('Unsaved changes. Discard?')) return; newLevel(); });
+            $('#saveLevelBtn').addEventListener('click', saveLevel);
+            $('#exportLevelBtn').addEventListener('click', exportLevel);
+            $('#saveToLevelsJsBtn').addEventListener('click', saveToLevelsJs);
+            $('#importLevelBtn').addEventListener('click', () => $('#importFile').click());
+            $('#importFile').addEventListener('change', importLevel);
+            $('#testLevelBtn').addEventListener('click', testLevel);
+            $('#backToGameBtn').addEventListener('click', () => window.location.href = 'index.html');
+
+            // Undo/Redo
+            $('#undoBtn').addEventListener('click', undo);
+            $('#redoBtn').addEventListener('click', redo);
+
+            // Zoom controls
+            $('#zoomInBtn').addEventListener('click', () => zoomAtCenter(1.2));
+            $('#zoomOutBtn').addEventListener('click', () => zoomAtCenter(0.8333));
+            $('#resetViewBtn').addEventListener('click', resetView);
+
+            // Grid resize
+            $('#resizeGridBtn').addEventListener('click', resizeGrid);
+            $('#gridWidthInput').addEventListener('change', resizeGrid);
+            $('#gridHeightInput').addEventListener('change', resizeGrid);
+
+            // Modals
+            $('#confirmImportBtn').addEventListener('click', confirmImport);
+            $('#cancelImportBtn').addEventListener('click', () => $('#importModal').classList.remove('open'));
+            $('#copyExportBtn').addEventListener('click', copyExport);
+            $('#downloadExportBtn').addEventListener('click', downloadExport);
+            $('#closeExportBtn').addEventListener('click', () => $('#exportModal').classList.remove('open'));
+            $('#confirmTestBtn').addEventListener('click', confirmTest);
+            $('#cancelTestBtn').addEventListener('click', () => $('#testModal').classList.remove('open'));
+
+            // Window resize
+            window.addEventListener('resize', resizeCanvas);
+        }
+
+        function navigateLevel(delta) {
+            let v = parseInt(levelSelect.value) + delta;
+            v = Math.max(1, Math.min(121, v));
+            levelSelect.value = v;
+            loadLevel(v);
+        }
+
+        // ============================================================================
+        // CANVAS INTERACTION
+        // ============================================================================
+        function getCellFromClient(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const xInternal = (clientX - rect.left) * scaleX;
+            const yInternal = (clientY - rect.top) * scaleY;
+            const x = Math.floor((xInternal - state.offsetX) / (state.cellSize * state.zoom));
+            const y = Math.floor((yInternal - state.offsetY) / (state.cellSize * state.zoom));
+            return { x, y };
+        }
+
+        function onMouseDown(e) {
+            if (e.button === 1) { // Middle click - pan
+                state.panning = true;
+                state.panStart = { x: e.clientX - state.offsetX, y: e.clientY - state.offsetY };
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+            if (e.button === 2) { // Right click - eraser
+                state.mouseRightDown = true;
+                state._prevMode = state.mode;
+                state.mode = 'eraser';
+                updateModeButtons();
+            } else {
+                state.mouseDown = true;
+            }
+            const cell = getCellFromClient(e.clientX, e.clientY);
+
+            if (state.mode === 'select') {
+                state.selectionStart = cell;
+                state.selection = { x: cell.x, y: cell.y, width: 0, height: 0 };
+            } else {
+                applyTool(cell.x, cell.y);
+                render();
+            }
+            state.lastCell = cell;
+        }
+
+        function onMouseMove(e) {
+            const cell = getCellFromClient(e.clientX, e.clientY);
+            state.hoverCell = cell;
+            updateHoverUI(cell);
+
+            if (state.panning) {
+                state.offsetX = e.clientX - state.panStart.x;
+                state.offsetY = e.clientY - state.panStart.y;
+                render();
+                return;
+            }
+
+            if (state.mouseDown || state.mouseRightDown) {
+                if (state.mode === 'select' && state.selectionStart) {
+                    const minX = Math.min(state.selectionStart.x, cell.x);
+                    const maxX = Math.max(state.selectionStart.x, cell.x);
+                    const minY = Math.min(state.selectionStart.y, cell.y);
+                    const maxY = Math.max(state.selectionStart.y, cell.y);
+                    state.selection = { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+                    render();
+                } else if (cell.x !== state.lastCell.x || cell.y !== state.lastCell.y) {
+                    applyTool(cell.x, cell.y);
+                    state.lastCell = cell;
+                    render();
+                }
+            }
+        }
+
+        function onMouseUp(e) {
+            if (e.button === 1) { state.panning = false; canvas.style.cursor = ''; return; }
+            if (e.button === 2) {
+                state.mouseRightDown = false;
+                if (state._prevMode) { state.mode = state._prevMode; delete state._prevMode; updateModeButtons(); }
+                return;
+            }
+            state.mouseDown = false;
+            state.lastCell = { x: -1, y: -1 };
+            state.selectionStart = null;
+        }
+
+        function onWheel(e) {
+            e.preventDefault();
+            if (e.ctrlKey || e.metaKey) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const mouseX = (e.clientX - rect.left) * scaleX;
+                const mouseY = (e.clientY - rect.top) * scaleY;
+                const oldZoom = state.zoom;
+                state.zoom = Math.max(state.minZoom, Math.min(state.maxZoom, state.zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+                const zoomFactor = state.zoom / oldZoom;
+                state.offsetX = mouseX - (mouseX - state.offsetX) * zoomFactor;
+                state.offsetY = mouseY - (mouseY - state.offsetY) * zoomFactor;
+                render();
+                updateUI();
+            } else {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                state.offsetX -= e.deltaX * scaleX;
+                state.offsetY -= e.deltaY * scaleY;
+                render();
+            }
+        }
+
+        // Zoom helper functions
+        function zoomAtCenter(factor) {
+            const oldZoom = state.zoom;
+            state.zoom = Math.max(state.minZoom, Math.min(state.maxZoom, state.zoom * factor));
+            const zoomFactor = state.zoom / oldZoom;
+            const centerX = canvas.width / 2 / oldZoom;
+            const centerY = canvas.height / 2 / oldZoom;
+            state.offsetX = (canvas.width / 2) - centerX * state.zoom;
+            state.offsetY = (canvas.height / 2) - centerY * state.zoom;
+            render();
+            updateUI();
+        }
+
+        function resetView() {
+            state.zoom = 1;
+            centerOnGrid();
+            render();
+            updateUI();
+        }
+
+        function resizeGrid() {
+            pushHistory();
+            // Max 18x18 (8x8 playable + 5 void border each side)
+            const newWidth = Math.max(5, Math.min(18, parseInt($('#gridWidthInput').value) || 18));
+            const newHeight = Math.max(5, Math.min(18, parseInt($('#gridHeightInput').value) || 18));
+            $('#gridWidthInput').value = newWidth;
+            $('#gridHeightInput').value = newHeight;
+
+            const oldBounds = state.bounds;
+            state.bounds = { minX: 0, maxX: newWidth - 1, minY: 0, maxY: newHeight - 1 };
+            state.gridWidth = newWidth;
+            state.gridHeight = newHeight;
+
+            // Fill new cells with void
+            for (let x = 0; x < newWidth; x++) {
+                for (let y = 0; y < newHeight; y++) {
+                    const key = tileKey(x, y);
+                    if (!state.grid.has(key)) {
+                        state.grid.set(key, { tileType: TileType.EMPTY });
+                    }
+                }
+            }
+
+            // Remove cells outside new bounds
+            for (const key of state.grid.keys()) {
+                const [x, y] = key.split(',').map(Number);
+                if (x >= newWidth || y >= newHeight) {
+                    state.grid.delete(key);
+                }
+            }
+
+            centerOnGrid();
+            render();
+            updateUI();
+            showToast(`Grid resized to ${newWidth}×${newHeight} (max 18x18)`);
+        }
+
+        // Undo/Redo
+        function pushHistory() {
+            // Serialize current grid state
+            const snapshot = {
+                grid: new Map(state.grid),
+                bounds: { ...state.bounds },
+                tools: { ...state.tools },
+                levelId: state.levelId,
+                levelName: state.levelName,
+                chapter: state.chapter,
+                maxMoves: state.maxMoves,
+            };
+
+            // Remove any history after current index
+            state.history = state.history.slice(0, state.historyIndex + 1);
+            state.history.push(snapshot);
+
+            // Limit history size
+            if (state.history.length > state.maxHistory) {
+                state.history.shift();
+            } else {
+                state.historyIndex++;
+            }
+        }
+
+        function undo() {
+            if (state.historyIndex <= 0) return;
+            state.historyIndex--;
+            restoreHistory(state.history[state.historyIndex]);
+            render();
+            updateUI();
+            showToast('Undo');
+        }
+
+        function redo() {
+            if (state.historyIndex >= state.history.length - 1) return;
+            state.historyIndex++;
+            restoreHistory(state.history[state.historyIndex]);
+            render();
+            updateUI();
+            showToast('Redo');
+        }
+
+        function restoreHistory(snapshot) {
+            state.grid = new Map(snapshot.grid);
+            state.bounds = { ...snapshot.bounds };
+            state.tools = { ...snapshot.tools };
+            state.levelId = snapshot.levelId;
+            state.levelName = snapshot.levelName;
+            state.chapter = snapshot.chapter;
+            state.maxMoves = snapshot.maxMoves;
+            state.gridWidth = state.bounds.maxX - state.bounds.minX + 1;
+            state.gridHeight = state.bounds.maxY - state.bounds.minY + 1;
+
+            // Update UI inputs
+            $('#levelIdInput').value = state.levelId;
+            $('#levelNameInput').value = state.levelName;
+            $('#levelChapterInput').value = state.chapter.toString();
+            $('#levelMovesInput').value = state.maxMoves.toString();
+            $('#gridWidthInput').value = state.gridWidth;
+            $('#gridHeightInput').value = state.gridHeight;
+        }
+
+        // ============================================================================
+        // TOOL APPLICATION
+        // ============================================================================
+        function tileKey(x, y) { return `${x},${y}`; }
+
+        function getGridCell(x, y) {
+            return state.grid.get(tileKey(x, y));
+        }
+
+        function setGridCell(x, y, data) {
+            const key = tileKey(x, y);
+            if (data) {
+                state.grid.set(key, data);
+            } else {
+                state.grid.delete(key);
+            }
+        }
+
+        function applyTool(x, y) {
+            const key = tileKey(x, y);
+            const existing = state.grid.get(key);
+
+            if (state.mode === 'eraser') {
+                // Set to void instead of deleting, so grid stays full
+                pushHistory();
+                state.grid.set(key, { tileType: TileType.EMPTY });
+                markUnsaved();
+                return;
+            }
+
+            if (!state.selectedPaletteItem) {
+                showToast('Select a tile from the palette first', 'warning');
+                return;
+            }
+
+            const item = state.selectedPaletteItem;
+            let newData = { ...existing };
+
+            if (item.type !== 'tool') {
+                pushHistory();
+            }
+
+            if (item.type === 'tile') {
+                newData.tileType = item.tileType;
+            } else if (item.type === 'entity') {
+                newData.entity = { type: item.entityType };
+                if (item.color) newData.entity.color = item.color;
+                if (item.piece) newData.entity.piece = item.piece;
+                if (item.state) newData.entity.state = item.state;
+                if (item.dir !== undefined) newData.entity.dir = item.dir;
+                // Ensure tile exists under entity
+                if (!newData.tileType || newData.tileType === TileType.EMPTY) {
+                    newData.tileType = TileType.NORMAL;
+                }
+            } else if (item.type === 'tool') {
+                // Tools are stored in level tools, not on grid
+                state.tools[item.toolType] = (state.tools[item.toolType] || 0) + 1;
+                markUnsaved();
+                showToast(`Added ${item.name} to tools`);
+                return;
+            }
+
+            setGridCell(x, y, newData);
+            markUnsaved();
+        }
+
+        function deleteSelection() {
+            if (!state.selection) return;
+            pushHistory();
+            let deleted = false;
+            for (let x = state.selection.x; x < state.selection.x + state.selection.width; x++) {
+                for (let y = state.selection.y; y < state.selection.y + state.selection.height; y++) {
+                    state.grid.set(tileKey(x, y), { tileType: TileType.EMPTY });
+                    deleted = true;
+                }
+            }
+            if (deleted) { markUnsaved(); showToast('Selection cleared to void'); }
+            state.selection = null;
+            render();
+        }
+
+        // ============================================================================
+        // PALETTE SELECTION
+        // ============================================================================
+        function selectPaletteItem(item, element) {
+            $$('.palette-item').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            state.selectedPaletteItem = item;
+            updateSelectedToolDisplay();
+        }
+
+        function updateSelectedToolDisplay() {
+            const preview = $('#toolPreview');
+            const nameEl = $('#toolName');
+            if (!state.selectedPaletteItem) {
+                preview.innerHTML = '';
+                nameEl.textContent = 'Select a tile from the palette';
+                return;
+            }
+            const item = state.selectedPaletteItem;
+            const modePrefix = state.mode === 'eraser' ? 'Eraser: ' : '';
+            nameEl.textContent = modePrefix + item.name;
+
+            // Draw preview
+            preview.innerHTML = `<canvas width="24" height="24"></canvas>`;
+            const c = preview.querySelector('canvas').getContext('2d');
+            drawPaletteIcon(c, item, 24);
+        }
+
+        function updateModeButtons() {
+            $$('[data-mode]').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === state.mode));
+            $('#modeDisplay').textContent = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
+        }
+
+        // ============================================================================
+        // LEVEL MANAGEMENT
+        // ============================================================================
+        function newLevel() {
+            state.levelId = 1;
+            state.levelName = 'New Level';
+            state.chapter = 1;
+            state.maxMoves = 10;
+            state.grid.clear();
+            state.bounds = { minX: 0, maxX: 17, minY: 0, maxY: 11 }; // 18x12 max
+            state.gridWidth = 18;
+            state.gridHeight = 18;
+
+            // Fill grid with void tiles so user sees full grid to paint on
+            for (let x = 0; x < 18; x++) {
+                for (let y = 0; y < 18; y++) {
+                    state.grid.set(tileKey(x, y), { tileType: TileType.EMPTY });
+                }
+            }
+
+            state.tools = { hammer: 0, arrows: { up: 0, right: 0, down: 0, left: 0 }, boot: 0, portalGun: 0 };
+            state.mode = 'pencil';
+            state.selectedPaletteItem = null;
+            state.unsavedChanges = false;
+            levelSelect.value = 1;
+            $('#levelIdInput').value = 1;
+            $('#levelNameInput').value = 'New Level';
+            $('#levelChapterInput').value = '1';
+            $('#levelMovesInput').value = '10';
+            $('#gridWidthInput').value = '18';
+            $('#gridHeightInput').value = '18';
+            $$('.palette-item').forEach(el => el.classList.remove('selected'));
+            updateModeButtons();
+            updateSelectedToolDisplay();
+            centerOnGrid();
+            // Initialize history with current state
+            state.history = [];
+            state.historyIndex = -1;
+            pushHistory();
+        }
+
+        function loadLevel(levelId) {
+            if (state.unsavedChanges && !confirm('Unsaved changes. Discard?')) return;
+
+            const levelData = getLevel(levelId);
+            if (!levelData) { showToast('Level not found', 'error'); return; }
+
+            // Convert fixed board to grid map
+            state.grid.clear();
+            const board = levelData.board || [];
+            for (let y = 0; y < board.length; y++) {
+                for (let x = 0; x < board[y].length; x++) {
+                    const tileType = board[y][x];
+                    if (tileType !== TileType.EMPTY && tileType !== undefined) {
+                        state.grid.set(tileKey(x, y), { tileType });
+                    }
+                }
+            }
+
+            // Load entities
+            const addEntity = (x, y, entity) => {
+                const key = tileKey(x, y);
+                const existing = state.grid.get(key) || { tileType: TileType.NORMAL };
+                existing.entity = entity;
+                state.grid.set(key, existing);
+            };
+
+            (levelData.knights || []).forEach(k => addEntity(k.x, k.y, { type: 'knight', color: k.color, id: k.id }));
+            (levelData.flags || []).forEach(f => addEntity(f.x, f.y, { type: 'flag', color: f.color }));
+            (levelData.coins || []).forEach(c => addEntity(c.x, c.y, { type: 'coin' }));
+            (levelData.portals || []).forEach(p => addEntity(p.x, p.y, { type: 'portal', color: p.color }));
+            (levelData.buttons || []).forEach(b => addEntity(b.x, b.y, { type: 'button', targets: b.targets }));
+            (levelData.bombs || []).forEach(b => addEntity(b.x, b.y, { type: 'bomb' }));
+            (levelData.chessPieces || []).forEach(c => addEntity(c.x, c.y, { type: 'chess', piece: c.type, color: c.color }));
+            (levelData.trafficLights || []).forEach(t => addEntity(t.x, t.y, { type: 'traffic', state: t.state }));
+            (levelData.voidArrows || []).forEach(v => addEntity(v.x, v.y, { type: 'voidarrow', dir: v.dir }));
+
+            // Meta
+            state.levelId = levelData.id;
+            state.levelName = levelData.name;
+            state.chapter = levelData.chapter || 1;
+            state.maxMoves = levelData.moves || 10;
+            state.tools = { ...levelData.tools, portalGun: levelData.tools?.portalGun || 0 };
+
+            // Calculate bounds from loaded data - keep within 18x12
+            let minX = 0, maxX = 17, minY = 0, maxY = 11;
+            let hasData = false;
+            state.grid.forEach((_, key) => {
+                hasData = true;
+                const [x, y] = key.split(',').map(Number);
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            });
+            if (hasData) {
+                // Add margin but clamp to 18x12
+                minX = Math.max(0, minX - 2);
+                maxX = Math.min(17, maxX + 2);
+                minY = Math.max(0, minY - 2);
+                maxY = Math.min(11, maxY + 2);
+            }
+            state.bounds = { minX, maxX, minY, maxY };
+            state.gridWidth = state.bounds.maxX - state.bounds.minX + 1;
+            state.gridHeight = state.bounds.maxY - state.bounds.minY + 1;
+
+            levelSelect.value = levelId;
+            $('#levelIdInput').value = levelId;
+            $('#levelNameInput').value = state.levelName;
+            $('#levelChapterInput').value = state.chapter.toString();
+            $('#levelMovesInput').value = state.maxMoves.toString();
+            $('#gridWidthInput').value = state.gridWidth.toString();
+            $('#gridHeightInput').value = state.gridHeight.toString();
+            state.unsavedChanges = false;
+
+            centerOnGrid();
+            render();
+            // Initialize history with current state
+            state.history = [];
+            state.historyIndex = -1;
+            pushHistory();
+            updateUI();
+            showToast(`Loaded Level ${levelId}: ${state.levelName}`);
+        }
+
+        function saveLevel() {
+            // Convert grid to fixed board
+            const bounds = state.bounds;
+            const width = bounds.maxX - bounds.minX + 1;
+            const height = bounds.maxY - bounds.minY + 1;
+
+            const board = [];
+            for (let y = 0; y < height; y++) {
+                const row = [];
+                for (let x = 0; x < width; x++) {
+                    const wx = bounds.minX + x;
+                    const wy = bounds.minY + y;
+                    const cell = state.grid.get(tileKey(wx, wy));
+                    row.push(cell?.tileType || TileType.EMPTY);
+                }
+                board.push(row);
+            }
+
+            const shiftX = -bounds.minX;
+            const shiftY = -bounds.minY;
+
+            const extractEntities = (type) => {
+                const results = [];
+                state.grid.forEach((cell, key) => {
+                    if (cell.entity && cell.entity.type === type) {
+                        const [x, y] = key.split(',').map(Number);
+                        const e = { x: x + shiftX, y: y + shiftY, ...cell.entity };
+                        delete e.type;
+                        results.push(e);
+                    }
+                });
+                return results;
+            };
+
+            const levelData = {
+                id: state.levelId,
+                name: state.levelName,
+                chapter: state.chapter,
+                moves: state.maxMoves,
+                board,
+                knights: extractEntities('knight'),
+                flags: extractEntities('flag'),
+                coins: extractEntities('coin'),
+                portals: extractEntities('portal'),
+                buttons: extractEntities('button'),
+                bombs: extractEntities('bomb'),
+                chessPieces: extractEntities('chess'),
+                trafficLights: extractEntities('traffic'),
+                voidArrows: extractEntities('voidarrow'),
+                tools: state.tools,
+            };
+
+            const customLevels = JSON.parse(localStorage.getItem('ickp_custom_levels') || '{}');
+            customLevels[state.levelId] = levelData;
+            localStorage.setItem('ickp_custom_levels', JSON.stringify(customLevels));
+
+            state.unsavedChanges = false;
+            showToast(`Level ${state.levelId} saved!`);
+            updateUI();
+        }
+
+        function exportLevel() {
+            const bounds = state.bounds;
+            const width = bounds.maxX - bounds.minX + 1;
+            const height = bounds.maxY - bounds.minY + 1;
+
+            const board = [];
+            for (let y = 0; y < height; y++) {
+                const row = [];
+                for (let x = 0; x < width; x++) {
+                    const wx = bounds.minX + x;
+                    const wy = bounds.minY + y;
+                    const cell = state.grid.get(tileKey(wx, wy));
+                    row.push(cell?.tileType || TileType.EMPTY);
+                }
+                board.push(row);
+            }
+
+            const shiftX = -bounds.minX;
+            const shiftY = -bounds.minY;
+
+            const extractEntities = (type) => {
+                const results = [];
+                state.grid.forEach((cell, key) => {
+                    if (cell.entity && cell.entity.type === type) {
+                        const [x, y] = key.split(',').map(Number);
+                        const e = { x: x + shiftX, y: y + shiftY, ...cell.entity };
+                        delete e.type;
+                        results.push(e);
+                    }
+                });
+                return results;
+            };
+
+            const levelData = {
+                id: state.levelId,
+                name: state.levelName,
+                chapter: state.chapter,
+                moves: state.maxMoves,
+                board,
+                knights: extractEntities('knight'),
+                flags: extractEntities('flag'),
+                coins: extractEntities('coin'),
+                portals: extractEntities('portal'),
+                buttons: extractEntities('button'),
+                bombs: extractEntities('bomb'),
+                chessPieces: extractEntities('chess'),
+                trafficLights: extractEntities('traffic'),
+                voidArrows: extractEntities('voidarrow'),
+                tools: state.tools,
+            };
+
+            $('#exportTextarea').value = JSON.stringify(levelData, null, 2);
+            $('#exportModal').classList.add('open');
+        }
+
+        function saveToLevelsJs() {
+            const bounds = state.bounds;
+            const width = bounds.maxX - bounds.minX + 1;
+            const height = bounds.maxY - bounds.minY + 1;
+
+            const board = [];
+            for (let y = 0; y < height; y++) {
+                const row = [];
+                for (let x = 0; x < width; x++) {
+                    const wx = bounds.minX + x;
+                    const wy = bounds.minY + y;
+                    const cell = state.grid.get(tileKey(wx, wy));
+                    row.push(cell?.tileType || TileType.EMPTY);
+                }
+                board.push(row);
+            }
+
+            const shiftX = -bounds.minX;
+            const shiftY = -bounds.minY;
+
+            const extractEntities = (type) => {
+                const results = [];
+                state.grid.forEach((cell, key) => {
+                    if (cell.entity && cell.entity.type === type) {
+                        const [x, y] = key.split(',').map(Number);
+                        const e = { x: x + shiftX, y: y + shiftY, ...cell.entity };
+                        delete e.type;
+                        results.push(e);
+                    }
+                });
+                return results;
+            };
+
+            const levelData = {
+                id: state.levelId,
+                name: state.levelName,
+                chapter: state.chapter,
+                moves: state.maxMoves,
+                board,
+                knights: extractEntities('knight'),
+                flags: extractEntities('flag'),
+                coins: extractEntities('coin'),
+                portals: extractEntities('portal'),
+                buttons: extractEntities('button'),
+                bombs: extractEntities('bomb'),
+                chessPieces: extractEntities('chess'),
+                trafficLights: extractEntities('traffic'),
+                voidArrows: extractEntities('voidarrow'),
+                tools: state.tools,
+            };
+
+            // Generate levels.js format
+            const jsCode = generateLevelsJsFormat(levelData);
+
+            // Create download
+            const blob = new Blob([jsCode], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ickp_level_${state.levelId}_for_levels.js`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showToast(`Level ${state.levelId} exported for levels.js!`);
+        }
+
+        function generateLevelsJsFormat(level) {
+            const boardStr = level.board.map(row =>
+                '            ' + JSON.stringify(row)
+            ).join(',\n');
+
+            const formatArray = (arr, formatter) => {
+                if (!arr || arr.length === 0) return '';
+                return arr.map(formatter).join(',\n');
+            };
+
+            const knightsStr = formatArray(level.knights, k =>
+                `            { x: ${k.x}, y: ${k.y}, color: KnightColor.${k.color.toUpperCase()}${k.id ? `, id: '${k.id}'` : ''} }`
+            );
+
+            const flagsStr = formatArray(level.flags, f =>
+                `            { x: ${f.x}, y: ${f.y}, color: KnightColor.${f.color.toUpperCase()} }`
+            );
+
+            const coinsStr = formatArray(level.coins, c =>
+                `            { x: ${c.x}, y: ${c.y} }`
+            );
+
+            const portalsStr = formatArray(level.portals, p =>
+                `            { x: ${p.x}, y: ${p.y}, color: '${p.color}' }`
+            );
+
+            const buttonsStr = formatArray(level.buttons, b =>
+                `            { x: ${b.x}, y: ${b.y}, targets: ${JSON.stringify(b.targets || [])} }`
+            );
+
+            const bombsStr = formatArray(level.bombs, b =>
+                `            { x: ${b.x}, y: ${b.y} }`
+            );
+
+            const chessStr = formatArray(level.chessPieces, c =>
+                `            { x: ${c.x}, y: ${c.y}, type: '${c.piece}', color: '${c.color}' }`
+            );
+
+            const trafficStr = formatArray(level.trafficLights, t =>
+                `            { x: ${t.x}, y: ${t.y}, state: '${t.state}' }`
+            );
+
+            const voidArrowsStr = formatArray(level.voidArrows, v =>
+                `            { x: ${v.x}, y: ${v.y}, dir: Dir.${['UP','RIGHT','DOWN','LEFT'][v.dir]} }`
+            );
+
+            const tools = level.tools || {};
+            const arrows = tools.arrows || {};
+            const toolsStr = `            { hammer: ${tools.hammer || 0}, arrows: { up: ${arrows.up || 0}, right: ${arrows.right || 0}, down: ${arrows.down || 0}, left: ${arrows.left || 0} }, boot: ${tools.boot || 0}${tools.portalGun ? `, portalGun: ${tools.portalGun}` : ''} }`;
+
+            return `// Level ${level.id}: ${level.name}
+    {
+        id: ${level.id}, name: '${level.name}', moves: ${level.moves}, chapter: ${level.chapter},
+        board: (() => {
+            const b = createBoard(${level.board[0]?.length || 18}, ${level.board.length || 18});
+${boardStr.split('\n').map(line => '            ' + line.trim()).join('\n')}
+            return b;
+        })(),
+        knights: [
+${knightsStr}
+        ],
+        flags: [
+${flagsStr}
+        ],
+        coins: [
+${coinsStr}
+        ],
+        portals: [
+${portalsStr}
+        ],
+        buttons: [
+${buttonsStr}
+        ],
+        bombs: [
+${bombsStr}
+        ],
+        chessPieces: [
+${chessStr}
+        ],
+        trafficLights: [
+${trafficStr}
+        ],
+        voidArrows: [
+${voidArrowsStr}
+        ],
+        tools: ${toolsStr}
+    },`;
+        }
+
+        function importLevel(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    $('#importTextarea').value = ev.target.result;
+                    $('#importModal').classList.add('open');
+                } catch (err) {
+                    showToast('Invalid JSON file', 'error');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+
+        function confirmImport() {
+            try {
+                const data = JSON.parse($('#importTextarea').value);
+                state.grid.clear();
+                const board = data.board || [];
+                for (let y = 0; y < board.length; y++) {
+                    for (let x = 0; x < board[y].length; x++) {
+                        const tileType = board[y][x];
+                        if (tileType !== TileType.EMPTY && tileType !== undefined) {
+                            state.grid.set(tileKey(x, y), { tileType });
+                        }
+                    }
+                }
+
+                const addEntity = (x, y, entity) => {
+                    const key = tileKey(x, y);
+                    const existing = state.grid.get(key) || { tileType: TileType.NORMAL };
+                    existing.entity = entity;
+                    state.grid.set(key, existing);
+                };
+
+                (data.knights || []).forEach(k => addEntity(k.x, k.y, { type: 'knight', color: k.color, id: k.id }));
+                (data.flags || []).forEach(f => addEntity(f.x, f.y, { type: 'flag', color: f.color }));
+                (data.coins || []).forEach(c => addEntity(c.x, c.y, { type: 'coin' }));
+                (data.portals || []).forEach(p => addEntity(p.x, p.y, { type: 'portal', color: p.color }));
+                (data.buttons || []).forEach(b => addEntity(b.x, b.y, { type: 'button', targets: b.targets }));
+                (data.bombs || []).forEach(b => addEntity(b.x, b.y, { type: 'bomb' }));
+                (data.chessPieces || []).forEach(c => addEntity(c.x, c.y, { type: 'chess', piece: c.type, color: c.color }));
+                (data.trafficLights || []).forEach(t => addEntity(t.x, t.y, { type: 'traffic', state: t.state }));
+                (data.voidArrows || []).forEach(v => addEntity(v.x, v.y, { type: 'voidarrow', dir: v.dir }));
+
+                state.levelId = data.id || 1;
+                state.levelName = data.name || 'Imported';
+                state.chapter = data.chapter || 1;
+                state.maxMoves = data.moves || 10;
+                state.tools = data.tools || { hammer: 0, arrows: { up: 0, right: 0, down: 0, left: 0 }, boot: 0, portalGun: 0 };
+
+                levelSelect.value = state.levelId;
+                $('#levelIdInput').value = state.levelId;
+
+                // Recalc bounds
+                let minX = 0, maxX = 17, minY = 0, maxY = 11;
+                state.grid.forEach((_, key) => {
+                    const [x, y] = key.split(',').map(Number);
+                    minX = Math.min(minX, x);
+                    maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                });
+                state.bounds = { minX: minX - 2, maxX: maxX + 2, minY: minY - 2, maxY: maxY + 2 };
+
+                $('#importModal').classList.remove('open');
+                centerOnGrid();
+                render();
+                updateUI();
+                state.unsavedChanges = true;
+                showToast('Level imported!');
+            } catch (err) {
+                showToast('Invalid level data', 'error');
+            }
+        }
+
+        function testLevel() {
+            if (state.unsavedChanges) {
+                $('#testModal').classList.add('open');
+            } else {
+                confirmTest();
+            }
+        }
+
+        function confirmTest() {
+            saveLevel();
+            $('#testModal').classList.remove('open');
+            // Create test level for game
+            const bounds = state.bounds;
+            const width = bounds.maxX - bounds.minX + 1;
+            const height = bounds.maxY - bounds.minY + 1;
+            const board = [];
+            for (let y = 0; y < height; y++) {
+                const row = [];
+                for (let x = 0; x < width; x++) {
+                    const wx = bounds.minX + x;
+                    const wy = bounds.minY + y;
+                    const cell = state.grid.get(tileKey(wx, wy));
+                    row.push(cell?.tileType || TileType.EMPTY);
+                }
+                board.push(row);
+            }
+            const shiftX = -bounds.minX;
+            const shiftY = -bounds.minY;
+
+            const extractEntities = (type) => {
+                const results = [];
+                state.grid.forEach((cell, key) => {
+                    if (cell.entity && cell.entity.type === type) {
+                        const [x, y] = key.split(',').map(Number);
+                        const e = { x: x + shiftX, y: y + shiftY, ...cell.entity };
+                        delete e.type;
+                        results.push(e);
+                    }
+                });
+                return results;
+            };
+
+            const testLevel = {
+                id: 999, name: 'Test Level', chapter: 1, moves: state.maxMoves,
+                board,
+                knights: extractEntities('knight'),
+                flags: extractEntities('flag'),
+                coins: extractEntities('coin'),
+                portals: extractEntities('portal'),
+                buttons: extractEntities('button'),
+                bombs: extractEntities('bomb'),
+                chessPieces: extractEntities('chess'),
+                trafficLights: extractEntities('traffic'),
+                voidArrows: extractEntities('voidarrow'),
+                tools: state.tools,
+            };
+            sessionStorage.setItem('ickp_test_level', JSON.stringify(testLevel));
+            window.open('index.html?test=1', '_blank');
+        }
+
+        function copyExport() {
+            navigator.clipboard.writeText($('#exportTextarea').value);
+            showToast('Copied to clipboard!');
+        }
+
+        function downloadExport() {
+            const blob = new Blob([$('#exportTextarea').value], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `ickp_level_${state.levelId}.json`; a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ============================================================================
+        // UI UPDATE
+        // ============================================================================
+        function updateUI() {
+            $('#saveStatusDot').classList.toggle('active', !state.unsavedChanges);
+            $('#saveStatus').textContent = state.unsavedChanges ? 'Unsaved' : 'Saved';
+            const b = state.bounds;
+            const w = b.maxX - b.minX + 1;
+            const h = b.maxY - b.minY + 1;
+            $('#gridSizeDisplay').textContent = `${w}×${h}`;
+            const zoomPct = Math.round(state.zoom * 100) + '%';
+            $('#zoomDisplay').textContent = zoomPct;
+            $('#zoomDisplayToolbar').textContent = zoomPct;
+            let tileCount = 0;
+            state.grid.forEach(cell => { if (cell.tileType && cell.tileType !== TileType.EMPTY) tileCount++; });
+            $('#tileCount').textContent = tileCount;
+            const hc = state.hoverCell;
+            $('#hoverCell').textContent = `(${hc.x}, ${hc.y})`;
+        }
+
+        function updateHoverUI(cell) {
+            // Could add hover preview
+        }
+
+        function markUnsaved() { state.unsavedChanges = true; updateUI(); }
+
+        function centerOnGrid() {
+            const b = state.bounds;
+            const centerX = (b.minX + b.maxX) / 2;
+            const centerY = (b.minY + b.maxY) / 2;
+            state.offsetX = canvas.clientWidth / 2 - centerX * state.cellSize * state.zoom;
+            state.offsetY = canvas.clientHeight / 2 - centerY * state.cellSize * state.zoom;
+        }
+
+        // ============================================================================
+        // RENDERING
+        // ============================================================================
+        function resizeCanvas() {
+            const containerRect = boardContainer.getBoundingClientRect();
+            canvas.width = containerRect.width;
+            canvas.height = containerRect.height;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            centerOnGrid();
+            render();
+        }
+
+        function render() {
+            if (!ctx) return;
+
+            // Clear entire canvas in screen coordinates (reset transform first)
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = '#0a0a14';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Apply game transform for drawing
+            ctx.setTransform(state.zoom, 0, 0, state.zoom, state.offsetX, state.offsetY);
+
+            const b = state.bounds;
+            const drawMinX = b.minX * state.cellSize;
+            const drawMaxX = (b.maxX + 1) * state.cellSize;
+            const drawMinY = b.minY * state.cellSize;
+            const drawMaxY = (b.maxY + 1) * state.cellSize;
+
+            // Grid lines - more visible
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            for (let x = b.minX; x <= b.maxX + 1; x++) {
+                const px = x * state.cellSize;
+                ctx.beginPath(); ctx.moveTo(px, drawMinY); ctx.lineTo(px, drawMaxY); ctx.stroke();
+            }
+            for (let y = b.minY; y <= b.maxY + 1; y++) {
+                const py = y * state.cellSize;
+                ctx.beginPath(); ctx.moveTo(drawMinX, py); ctx.lineTo(drawMaxX, py); ctx.stroke();
+            }
+
+            // Draw bounds border
+            ctx.strokeStyle = '#00d4aa66';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 4]);
+            ctx.strokeRect(drawMinX, drawMinY, drawMaxX - drawMinX, drawMaxY - drawMinY);
+            ctx.setLineDash([]);
+
+            // Coordinate labels on axes
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.font = '10px JetBrains Mono';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            for (let x = b.minX; x <= b.maxX; x++) {
+                const px = x * state.cellSize + state.cellSize / 2;
+                ctx.fillText(x.toString(), px, drawMinY - 10);
+            }
+            for (let y = b.minY; y <= b.maxY; y++) {
+                const py = y * state.cellSize + state.cellSize / 2;
+                ctx.fillText(y.toString(), drawMinX - 15, py);
+            }
+
+            // Draw tiles and entities
+            state.grid.forEach((cell, key) => {
+                const [x, y] = key.split(',').map(Number);
+                const px = x * state.cellSize;
+                const py = y * state.cellSize;
+                const s = state.cellSize;
+
+                // Tile - draw ALL tiles including EMPTY (void)
+                if (cell.tileType !== undefined) {
+                    drawTile(ctx, px, py, s, cell.tileType);
+                }
+
+                // Entity
+                if (cell.entity) {
+                    drawEntity(ctx, px, py, s, cell.entity);
+                }
+            });
+
+            // Selection rectangle
+            if (state.selection) {
+                const sx = state.selection.x * state.cellSize;
+                const sy = state.selection.y * state.cellSize;
+                const sw = state.selection.width * state.cellSize;
+                const sh = state.selection.height * state.cellSize;
+                ctx.strokeStyle = '#00d4aa';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([8, 4]);
+                ctx.strokeRect(sx, sy, sw, sh);
+                ctx.setLineDash([]);
+                ctx.fillStyle = 'rgba(0,212,170,0.15)';
+                ctx.fillRect(sx, sy, sw, sh);
+            }
+
+            // Hover highlight - always show if mouse is over canvas area
+            const hx = state.hoverCell.x * state.cellSize;
+            const hy = state.hoverCell.y * state.cellSize;
+            const s = state.cellSize;
+            // Show hover for a slightly larger area to help with placement
+            if (state.hoverCell.x >= b.minX - 2 && state.hoverCell.x <= b.maxX + 2 && state.hoverCell.y >= b.minY - 2 && state.hoverCell.y <= b.maxY + 2) {
+                ctx.strokeStyle = state.mode === 'eraser' ? '#ff6b6b' : '#00d4aa';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 4]);
+                ctx.strokeRect(hx + 1, hy + 1, s - 2, s - 2);
+                ctx.setLineDash([]);
+                // Show coordinates
+                ctx.fillStyle = state.mode === 'eraser' ? '#ff6b6b' : '#00d4aa';
+                ctx.font = '11px JetBrains Mono';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(`(${state.hoverCell.x}, ${state.hoverCell.y})`, hx + 4, hy - 4);
+            }
+
+            // Ghost preview of selected tile at hover position (when in pencil mode)
+            if (state.mode === 'pencil' && state.selectedPaletteItem && state.selectedPaletteItem.type === 'tile') {
+                const ghostX = state.hoverCell.x * state.cellSize;
+                const ghostY = state.hoverCell.y * state.cellSize;
+                if (state.hoverCell.x >= b.minX - 2 && state.hoverCell.x <= b.maxX + 2 && state.hoverCell.y >= b.minY - 2 && state.hoverCell.y <= b.maxY + 2) {
+                    ctx.globalAlpha = 0.3;
+                    drawTile(ctx, ghostX, ghostY, s, state.selectedPaletteItem.tileType);
+                    ctx.globalAlpha = 1;
+                }
+            }
+        }
+
+        function drawTile(ctx, px, py, s, type) {
+            const colors = {
+                [TileType.EMPTY]: '#050510',
+                [TileType.NORMAL]: '#1a1a3a',
+                [TileType.CRACKED]: '#2a1a1a',
+                [TileType.BRICK]: '#6b2a2a',
+                [TileType.METAL]: '#3a3a5a',
+                [TileType.ARROW_GREEN_UP]: '#004d3d',
+                [TileType.ARROW_GREEN_RIGHT]: '#004d3d',
+                [TileType.ARROW_GREEN_DOWN]: '#004d3d',
+                [TileType.ARROW_GREEN_LEFT]: '#004d3d',
+                [TileType.ARROW_BLUE_UP]: '#003d4d',
+                [TileType.ARROW_BLUE_RIGHT]: '#003d4d',
+                [TileType.ARROW_BLUE_DOWN]: '#003d4d',
+                [TileType.ARROW_BLUE_LEFT]: '#003d4d',
+                [TileType.ARROW_4WAY]: '#4d3d00',
+            };
+
+            ctx.fillStyle = colors[type] || '#1a1a3a';
+            ctx.fillRect(px, py, s, s);
+
+            ctx.strokeStyle = '#2a2a4a';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px + 0.5, py + 0.5, s - 1, s - 1);
+
+            if (type === TileType.CRACKED) {
+                ctx.strokeStyle = '#664444';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(px + 8, py + 8); ctx.lineTo(px + s - 8, py + s - 8);
+                ctx.moveTo(px + s - 8, py + 8); ctx.lineTo(px + 8, py + s - 8);
+                ctx.moveTo(px + s/2, py + 8); ctx.lineTo(px + s/2, py + s - 8);
+                ctx.moveTo(px + 8, py + s/2); ctx.lineTo(px + s - 8, py + s/2);
+                ctx.stroke();
+            }
+
+            if ([TileType.ARROW_GREEN_UP, TileType.ARROW_GREEN_RIGHT, TileType.ARROW_GREEN_DOWN, TileType.ARROW_GREEN_LEFT].includes(type)) {
+                drawArrowOnTile(ctx, px, py, s, type, '#00d4aa', 1);
+            }
+            if ([TileType.ARROW_BLUE_UP, TileType.ARROW_BLUE_RIGHT, TileType.ARROW_BLUE_DOWN, TileType.ARROW_BLUE_LEFT].includes(type)) {
+                drawArrowOnTile(ctx, px, py, s, type, '#6bcbff', 2);
+            }
+            if (type === TileType.ARROW_4WAY) {
+                drawArrowOnTile(ctx, px, py, s, TileType.ARROW_GREEN_UP, '#ffd93d', 1);
+                drawArrowOnTile(ctx, px, py, s, TileType.ARROW_GREEN_RIGHT, '#ffd93d', 1);
+                drawArrowOnTile(ctx, px, py, s, TileType.ARROW_GREEN_DOWN, '#ffd93d', 1);
+                drawArrowOnTile(ctx, px, py, s, TileType.ARROW_GREEN_LEFT, '#ffd93d', 1);
+            }
+        }
+
+        function drawArrowOnTile(ctx, px, py, s, type, color, spaces) {
+            const cx = px + s/2, cy = py + s/2;
+            let dx = 0, dy = 0;
+            if (type === TileType.ARROW_GREEN_UP || type === TileType.ARROW_BLUE_UP) { dx = 0; dy = -1; }
+            else if (type === TileType.ARROW_GREEN_RIGHT || type === TileType.ARROW_BLUE_RIGHT) { dx = 1; dy = 0; }
+            else if (type === TileType.ARROW_GREEN_DOWN || type === TileType.ARROW_BLUE_DOWN) { dx = 0; dy = 1; }
+            else { dx = -1; dy = 0; }
+
+            const as = s * 0.25;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(cx + dx * as, cy + dy * as);
+            ctx.lineTo(cx - dy * as * 0.6, cy + dx * as * 0.6);
+            ctx.lineTo(cx + dy * as * 0.6, cy - dx * as * 0.6);
+            ctx.fill();
+
+            if (spaces === 2) {
+                ctx.fillStyle = color + '80';
+                ctx.beginPath();
+                ctx.moveTo(cx + dx * as * 1.8, cy + dy * as * 1.8);
+                ctx.lineTo(cx - dy * as * 0.4, cy + dx * as * 0.4);
+                ctx.lineTo(cx + dy * as * 0.4, cy - dx * as * 0.4);
+                ctx.fill();
+            }
+        }
+
+        function drawEntity(ctx, px, py, s, entity) {
+            const cx = px + s/2, cy = py + s/2;
+
+            switch (entity.type) {
+                case 'knight': {
+                    const color = entity.color === KnightColor.BLACK ? '#444' : (entity.color === KnightColor.WHITE ? '#fff' : entity.color === KnightColor.RED ? '#f66' : entity.color === KnightColor.BLUE ? '#66f' : entity.color === KnightColor.GREEN ? '#6f6' : '#ff6');
+                    ctx.fillStyle = color;
+                    ctx.beginPath(); ctx.arc(cx, cy, s * 0.35, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = entity.color === KnightColor.BLACK ? '#222' : '#ccc';
+                    ctx.lineWidth = 2; ctx.stroke();
+                    ctx.font = `bold ${s * 0.45}px serif`;
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillStyle = entity.color === KnightColor.BLACK ? '#fff' : '#000';
+                    ctx.fillText(entity.color === KnightColor.BLACK ? '♞' : '♘', cx, cy + s * 0.05);
+                    break;
+                }
+                case 'flag': {
+                    ctx.strokeStyle = '#444'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(cx, py + s); ctx.lineTo(cx, py + s * 0.2); ctx.stroke();
+                    ctx.fillStyle = entity.color === KnightColor.BLACK ? '#ff6b6b' : '#ffd93d';
+                    ctx.beginPath();
+                    ctx.moveTo(cx, py + s * 0.2);
+                    ctx.lineTo(cx + s * 0.3, py + s * 0.4);
+                    ctx.lineTo(cx, py + s * 0.6);
+                    ctx.closePath(); ctx.fill();
+                    break;
+                }
+                case 'coin': {
+                    ctx.fillStyle = '#ffd93d';
+                    ctx.beginPath(); ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = '#e8c000'; ctx.lineWidth = 2; ctx.stroke();
+                    ctx.fillStyle = '#fff8c0';
+                    ctx.beginPath(); ctx.arc(cx - s * 0.08, cy - s * 0.08, s * 0.12, 0, Math.PI * 2); ctx.fill();
+                    break;
+                }
+                case 'portal': {
+                    for (let r = 3; r < s/2; r += 4) {
+                        ctx.strokeStyle = entity.color;
+                        ctx.lineWidth = 1.5;
+                        ctx.globalAlpha = 0.6;
+                        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+                    }
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = entity.color;
+                    ctx.beginPath(); ctx.arc(cx, cy, s * 0.12, 0, Math.PI * 2); ctx.fill();
+                    break;
+                }
+                case 'button': {
+                    ctx.fillStyle = '#4a9'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = '#287'; ctx.lineWidth = 2; ctx.stroke();
+                    break;
+                }
+                case 'bomb': {
+                    ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(cx, cy - 2, s * 0.25, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.stroke();
+                    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+                    ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.25 - 2); ctx.lineTo(cx, cy - s * 0.25 - 6); ctx.stroke();
+                    break;
+                }
+                case 'chess': {
+                    ctx.font = `${s * 0.55}px serif`;
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillStyle = entity.color === 'white' ? '#fff' : '#000';
+                    const icons = { pawn: '♙', bishop: '♗', rook: '♖', queen: '♕', king: '♔' };
+                    ctx.fillText(icons[entity.piece] || '?', cx, cy);
+                    break;
+                }
+                case 'traffic': {
+                    const w = 10, h = 24;
+                    ctx.fillStyle = '#222'; ctx.fillRect(cx - w/2, cy - h/2, w, h);
+                    ctx.fillStyle = entity.state === 'green' ? '#0f0' : '#333';
+                    ctx.beginPath(); ctx.arc(cx, cy - 5, 3.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = entity.state === 'red' ? '#f00' : '#333';
+                    ctx.beginPath(); ctx.arc(cx, cy + 5, 3.5, 0, Math.PI * 2); ctx.fill();
+                    break;
+                }
+                case 'voidarrow': {
+                    const as = s * 0.28;
+                    let dx = 0, dy = 0;
+                    if (entity.dir === 0) { dx = 0; dy = -1; }
+                    else if (entity.dir === 1) { dx = 1; dy = 0; }
+                    else if (entity.dir === 2) { dx = 0; dy = 1; }
+                    else { dx = -1; dy = 0; }
+                    ctx.fillStyle = '#6bcbff';
+                    ctx.beginPath();
+                    ctx.moveTo(cx + dx * as, cy + dy * as);
+                    ctx.lineTo(cx - dy * as * 0.7, cy + dx * as * 0.7);
+                    ctx.lineTo(cx + dy * as * 0.7, cy - dx * as * 0.7);
+                    ctx.fill();
+                    break;
+                }
+            }
+        }
+
+        // ============================================================================
+        // MODAL / TOAST
+        // ============================================================================
+        function showToast(msg, type = 'success') {
+            const toast = $('#toast');
+            toast.querySelector('.toast-message').textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>

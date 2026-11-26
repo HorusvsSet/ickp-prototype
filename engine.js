@@ -331,13 +331,24 @@ export class GameState {
         this.bombs = [...(levelData.bombs || [])];
 
         // Tethers
-        this.tethers = [...(levelData.tethers || [])].map(t => ({
-            ...t,
-            knightAId: t.knightA,
-            knightBId: t.knightB,
-            length: t.length || 1,
-            broken: false
-        }));
+        this.tethers = [...(levelData.tethers || [])].map(t => {
+            const knightA = this.knights.find(k => k.id === t.knightA);
+            const knightB = this.knights.find(k => k.id === t.knightB);
+            // If no length specified, calculate from initial knight positions
+            let length = t.length;
+            if (length === undefined && knightA && knightB) {
+                const dx = Math.abs(knightA.x - knightB.x);
+                const dy = Math.abs(knightA.y - knightB.y);
+                length = Math.max(dx, dy); // Chebyshev distance
+            }
+            return {
+                ...t,
+                knightAId: t.knightA,
+                knightBId: t.knightB,
+                length: length || 1,
+                broken: false
+            };
+        });
 
         // Void arrows (off-board)
         this.voidArrows = [...(levelData.voidArrows || [])];
@@ -599,6 +610,10 @@ export class GameState {
             knight.carriedKnight.elevation = 1;
         }
 
+        // Calculate move delta for tether
+        const moveDx = newX - knight.x;
+        const moveDy = newY - knight.y;
+
         // Update knight position
         knight.x = newX;
         knight.y = newY;
@@ -606,8 +621,8 @@ export class GameState {
         // Check tile interactions
         this.handleTileInteraction(knight, newX, newY);
 
-        // Check tether constraints
-        this.checkTethers(knight);
+        // Check tether - move tethered knight in same direction
+        this.checkTethers(knight, moveDx, moveDy);
 
         // Increment move counter (unless infinite moves mode)
         if (!this.infiniteMoves) {
@@ -1150,20 +1165,49 @@ export class GameState {
     }
 
     handlePortal(knight, x, y, portalTile) {
+        // Prevent infinite portal loops
+        if (knight.justTeleported) return;
+
         const portalColor = this.getPortalColor(portalTile);
         const entryPortal = this.portals.find(p => p.x === x && p.y === y && p.color === portalColor);
         if (!entryPortal) return;
 
-        const exitPortal = this.portals.find(p => p.color === portalColor && (p.x !== x || p.y !== y));
+        // Use linkedPortal if defined, otherwise find any other portal of same color
+        let exitPortal = null;
+        if (entryPortal.linkedPortal) {
+            // Linked portal can be {x, y} for same level or {x, y, level} for cross-level
+            const linked = entryPortal.linkedPortal;
+            if (linked.level !== undefined) {
+                // Cross-level portal - would need level transition logic
+                this.message = `Cross-level portal to level ${linked.level} (not yet implemented)`;
+                return;
+            } else {
+                // Same-level linked portal
+                exitPortal = this.portals.find(p => p.x === linked.x && p.y === linked.y && p.color === portalColor);
+            }
+        } else {
+            // Fallback: find any other portal of same color
+            exitPortal = this.portals.find(p => p.color === portalColor && (p.x !== x || p.y !== y));
+        }
+
         if (exitPortal) {
             // Teleport
             knight.x = exitPortal.x;
             knight.y = exitPortal.y;
-            knight.onPortal = true;
+            knight.justTeleported = true; // Prevent re-triggering
             this.message = `Teleported via ${portalColor} portal!`;
 
-            // Check exit tile
-            this.handleTileInteraction(knight, exitPortal.x, exitPortal.y);
+            // Check exit tile (but skip portal re-trigger)
+            const exitTile = this.board[exitPortal.y]?.[exitPortal.x];
+            if (exitTile && !this.isPortal(exitTile)) {
+                this.handleTileInteraction(knight, exitPortal.x, exitPortal.y);
+            } else {
+                // Exit is also a portal - just mark as on portal without re-triggering
+                knight.onPortal = true;
+            }
+
+            // Reset teleport flag after a tick
+            setTimeout(() => { knight.justTeleported = false; }, 0);
         }
     }
 
@@ -1260,7 +1304,10 @@ export class GameState {
         return names[type] || 'Piece';
     }
 
-    checkTethers(knight) {
+    checkTethers(knight, moveDx, moveDy) {
+        // If no movement, nothing to tether
+        if (moveDx === 0 && moveDy === 0) return;
+
         for (const tether of this.tethers) {
             if (tether.broken) continue;
 
@@ -1268,30 +1315,62 @@ export class GameState {
             const knightB = this.knights.find(k => k.id === tether.knightBId);
             if (!knightA || !knightB) continue;
 
+            // Determine which knight moved and which is tethered
+            const movedKnight = (knight.id === knightA.id) ? knightA :
+                               (knight.id === knightB.id) ? knightB : null;
+            const tetheredKnight = (movedKnight === knightA) ? knightB : knightA;
+
+            if (!movedKnight || !tetheredKnight) continue;
+
+            // Check if there's a brick between them (breaks tether)
             const dx = Math.abs(knightA.x - knightB.x);
             const dy = Math.abs(knightA.y - knightB.y);
-            const distance = Math.max(dx, dy); // Chebyshev distance
-
-            if (distance > tether.length) {
-                // Check if brick between them
-                let blocked = false;
-                const steps = Math.max(dx, dy);
-                for (let i = 1; i < steps; i++) {
-                    const tx = knightA.x + Math.sign(knightB.x - knightA.x) * i;
-                    const ty = knightA.y + Math.sign(knightB.y - knightA.y) * i;
-                    if (this.board[ty]?.[tx] === TileType.BRICK) {
-                        blocked = true;
-                        break;
-                    }
+            const steps = Math.max(dx, dy);
+            let blockedByBrick = false;
+            for (let i = 1; i < steps; i++) {
+                const tx = knightA.x + Math.sign(knightB.x - knightA.x) * i;
+                const ty = knightA.y + Math.sign(knightB.y - knightA.y) * i;
+                if (this.board[ty]?.[tx] === TileType.BRICK) {
+                    blockedByBrick = true;
+                    break;
                 }
-                if (blocked) {
+            }
+            if (blockedByBrick) {
+                tether.broken = true;
+                this.message = 'Tether snapped by brick!';
+                continue;
+            }
+
+            // Move tethered knight in the SAME direction
+            const newTx = tetheredKnight.x + moveDx;
+            const newTy = tetheredKnight.y + moveDy;
+
+            // Validate tethered knight's move using same delta
+            const tetheredValidation = this.canMoveKnight(tetheredKnight, moveDx, moveDy);
+
+            if (tetheredValidation.valid) {
+                // Handle cracked tile departure for tethered knight
+                if (this.board[tetheredKnight.y] && this.board[tetheredKnight.y][tetheredKnight.x] === TileType.CRACKED) {
+                    this.board[tetheredKnight.y][tetheredKnight.x] = TileType.EMPTY;
+                }
+
+                // Move tethered knight
+                tetheredKnight.x = newTx;
+                tetheredKnight.y = newTy;
+
+                // Handle tile interactions for tethered knight
+                this.handleTileInteraction(tetheredKnight, newTx, newTy);
+            } else {
+                // Tethered knight can't move - check if brick in the way
+                const targetTile = this.board[newTy]?.[newTx];
+                if (targetTile === TileType.BRICK) {
                     tether.broken = true;
                     this.message = 'Tether snapped by brick!';
                 } else {
-                    // Pull other knight
-                    // Simplified: just prevent the move
-                    knight.x = knight.x - Math.sign(knight.x - knightA.x);
-                    knight.y = knight.y - Math.sign(knight.y - knightA.y);
+                    // Prevent the original move by reverting
+                    knight.x -= moveDx;
+                    knight.y -= moveDy;
+                    this.message = 'Tether pulled tight!';
                 }
             }
         }
